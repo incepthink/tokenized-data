@@ -91,7 +91,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px]" />
         </div>
-        <div className="relative text-center max-w-3xl mx-auto">
+        <div className="relative text-center w-full max-w-5xl mx-auto">
           <p className="text-xs font-semibold tracking-[0.2em] uppercase text-primary mb-6">
             Blockchain-Powered Document Exchange
           </p>
@@ -103,21 +103,26 @@ export default function LandingPage() {
             NexVault lets you tokenize documents as NFTs, assign ownership to
             any wallet, and enable auditable, permissioned access — all on Base.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
-            <Link to="/auth/creator">
-              <Button className="gradient-primary text-primary-foreground font-semibold px-8 py-6 text-base rounded-xl glow-primary hover:glow-primary-strong transition-shadow">
-                Start as Creator
-                <ArrowRight size={18} className="ml-2" />
-              </Button>
-            </Link>
-            <a href="#how-it-works">
-              <Button
-                variant="outline"
-                className="border-border text-muted-foreground hover:text-foreground px-8 py-6 text-base rounded-xl bg-transparent"
+          <div className="grid md:grid-cols-3 gap-8 mb-10">
+            {PERSONAS.map((p) => (
+              <div
+                key={p.name}
+                className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center text-center hover:border-primary/50 transition-colors"
               >
-                Learn More
-              </Button>
-            </a>
+                <div className="w-14 h-14 rounded-xl gradient-primary flex items-center justify-center mb-6 glow-primary">
+                  <p.icon size={28} className="text-primary-foreground" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  {p.name}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-6">{p.desc}</p>
+                <Link to={p.path}>
+                  <Button className="gradient-primary text-primary-foreground rounded-xl glow-primary hover:glow-primary-strong">
+                    Get Started <ArrowRight size={16} className="ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            ))}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-6">
             {BADGES.map((b) => (

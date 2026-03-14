@@ -36,7 +36,7 @@ const App = () => (
         <AuthProvider>
           <TooltipProvider>
             <Sonner theme="dark" />
-            <BrowserRouter>
+            <BrowserRouter basename="/examples/tokenized-data">
               <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/auth/:persona" element={<AuthPage />} />
