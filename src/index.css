@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 33% 11%;
+    --card-foreground: 210 40% 98%;
+    --card-elevated: 220 25% 16%;
+
+    --popover: 220 33% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 258 90% 66%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 215 19% 35%;
+    --muted-foreground: 215 25% 64%;
+
+    --accent: 239 84% 67%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --border: 215 25% 22%;
+    --input: 215 25% 22%;
+    --ring: 239 84% 67%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 220 33% 11%;
+    --sidebar-foreground: 215 25% 64%;
+    --sidebar-primary: 239 84% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 25% 16%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 215 25% 22%;
+    --sidebar-ring: 239 84% 67%;
+
+    --glow-primary: 0 0 20px rgba(99, 102, 241, 0.3);
+    --glow-primary-strong: 0 0 30px rgba(99, 102, 241, 0.5);
+    --gradient-primary: linear-gradient(135deg, hsl(239 84% 67%), hsl(258 90% 66%));
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer utilities {
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
+
+  .glow-primary-strong {
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(239 84% 67%), hsl(258 90% 66%));
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(239 84% 67%), hsl(258 90% 66%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(220 25% 16%) 0%,
+      hsl(215 25% 22%) 50%,
+      hsl(220 25% 16%) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.6); }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes checkmark-pop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .animate-checkmark {
+    animation: checkmark-pop 0.5s ease-out forwards;
+  }
+}
