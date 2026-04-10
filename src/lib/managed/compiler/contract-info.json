@@ -1,0 +1,180 @@
+{
+  "compiler-version": "0.30.0",
+  "language-version": "0.22.0",
+  "runtime-version": "0.15.0",
+  "circuits": [
+    {
+      "name": "createCollection",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "creatorPubKey",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Uint",
+        "maxval": 340282366920938463463374607431768211455
+      }
+    },
+    {
+      "name": "mintDocument",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "inputDocHash",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        },
+        {
+          "name": "inputMetaHash",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        },
+        {
+          "name": "inputOwnerPk",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        },
+        {
+          "name": "inputCreatorPk",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        },
+        {
+          "name": "inputCollectionId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Uint",
+        "maxval": 340282366920938463463374607431768211455
+      }
+    },
+    {
+      "name": "grantAccess",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        },
+        {
+          "name": "viewerPubKey",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "revokeAccess",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        },
+        {
+          "name": "viewerPubKey",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "signDocument",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        },
+        {
+          "name": "viewerPubKey",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    }
+  ],
+  "witnesses": [
+    {
+      "name": "ownerSecretKey",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Bytes",
+        "length": 32
+      }
+    },
+    {
+      "name": "viewerSecretKey",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Bytes",
+        "length": 32
+      }
+    },
+    {
+      "name": "viewerSignatureHash",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Bytes",
+        "length": 32
+      }
+    }
+  ],
+  "contracts": [
+  ]
+}

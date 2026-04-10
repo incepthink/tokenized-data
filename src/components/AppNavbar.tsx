@@ -1,7 +1,8 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { NexVaultLogo } from "@/components/NexVaultLogo";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+// import { ConnectButton } from "@rainbow-me/rainbowkit"; // Replaced by 1AM Midnight Wallet
+import { MidnightConnectButton } from "@/components/MidnightConnectButton";
 import { LogOut, Menu, X, User } from "lucide-react";
 import { useState } from "react";
 import {
@@ -64,7 +65,8 @@ export function AppNavbar() {
           </div>
 
           <div className="flex items-center gap-3">
-            <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
+            {/* <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" /> */}
+            <MidnightConnectButton walletType="lace" />
 
             {user && (
               <DropdownMenu>

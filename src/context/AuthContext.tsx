@@ -1,23 +1,20 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
-import { Persona, MOCK_USERS } from "@/mock/data";
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  wallet?: string;
-}
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { Persona } from "@/mock/data";
+import { login as apiLogin, signup as apiSignup, getMe } from "@/api/auth";
+import type { AuthUser } from "@/api/auth";
 
 interface AuthContextType {
   persona: Persona | null;
-  user: User | null;
-  login: (persona: Persona, email: string, password: string) => void;
+  user: AuthUser | null;
+  isInitializing: boolean;
+  login: (persona: Persona, email: string, password: string) => Promise<void>;
   signup: (
     persona: Persona,
     name: string,
     email: string,
     password: string,
-  ) => void;
+    wallet?: string,
+  ) => Promise<void>;
   logout: () => void;
 }
 
@@ -25,35 +22,53 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [persona, setPersona] = useState<Persona | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  const login = useCallback((p: Persona, _email: string, _password: string) => {
-    const mockUser = MOCK_USERS[p];
-    setPersona(p);
-    setUser(mockUser);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsInitializing(false);
+      return;
+    }
+    getMe()
+      .then((u) => {
+        setUser(u);
+        setPersona(u.persona);
+      })
+      .catch(() => {
+        localStorage.removeItem("token");
+      })
+      .finally(() => {
+        setIsInitializing(false);
+      });
+  }, []);
+
+  const login = useCallback(async (_p: Persona, email: string, password: string) => {
+    const { user: u, token } = await apiLogin(email, password);
+    localStorage.setItem("token", token);
+    setPersona(u.persona);
+    setUser(u);
   }, []);
 
   const signup = useCallback(
-    (p: Persona, name: string, email: string, _password: string) => {
-      const mockUser = MOCK_USERS[p];
-      setPersona(p);
-      setUser({
-        id: `${p}_new`,
-        name,
-        email,
-        wallet: "wallet" in mockUser ? mockUser.wallet : undefined,
-      });
+    async (p: Persona, name: string, email: string, password: string, wallet?: string) => {
+      const { user: u, token } = await apiSignup(name, email, password, p, wallet);
+      localStorage.setItem("token", token);
+      setPersona(u.persona);
+      setUser(u);
     },
     [],
   );
 
   const logout = useCallback(() => {
+    localStorage.removeItem("token");
     setPersona(null);
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ persona, user, login, signup, logout }}>
+    <AuthContext.Provider value={{ persona, user, isInitializing, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

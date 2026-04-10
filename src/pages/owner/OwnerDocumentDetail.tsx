@@ -1,16 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { truncateAddress } from "@/mock/data";
+import { useDocument } from "@/hooks/useDocuments";
+import { useViewerList } from "@/hooks/useViewers";
 import {
-  MOCK_DOCUMENTS,
-  MOCK_VIEWERS,
-  MOCK_SHARED_WITH,
-  MOCK_ACCESS_LOGS,
-  simulateDelay,
-  truncateAddress,
-} from "@/mock/data";
+  useDocumentViewers,
+  useGrantAccess,
+  useRevokeAccess,
+  useAccessLogs,
+} from "@/hooks/useSharing";
+import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
+import {
+  callGrantAccess,
+  callRevokeAccess,
+  decodeShieldedAddress,
+} from "@/lib/midnight/contractApi";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
 import { CategoryBadge, NftBadge } from "@/components/Badges";
-import { WalletAddress } from "@/components/WalletAddress";
 import { FilePreview } from "@/components/FilePreview";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Eye, CheckCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, Eye, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -42,21 +48,18 @@ import { ChevronDown } from "lucide-react";
 
 export default function OwnerDocumentDetail() {
   const { id } = useParams<{ id: string }>();
-  const [loading, setLoading] = useState(true);
   const [selectedViewer, setSelectedViewer] = useState("");
-  const [sharedWith, setSharedWith] = useState(
-    MOCK_SHARED_WITH[id || ""] || [],
-  );
-  const [accessLogs] = useState(MOCK_ACCESS_LOGS[id || ""] || []);
   const [nftOpen, setNftOpen] = useState(false);
 
-  const doc = MOCK_DOCUMENTS.find((d) => d.id === id);
+  const { data: doc, isLoading } = useDocument(id!);
+  const { data: viewerList } = useViewerList();
+  const { data: sharedWith } = useDocumentViewers(id!);
+  const { data: accessLogs } = useAccessLogs(id!);
+  const grantAccess = useGrantAccess();
+  const revokeAccess = useRevokeAccess();
+  const { connectedAPI } = useMidnightWalletContext();
 
-  useEffect(() => {
-    simulateDelay().then(() => setLoading(false));
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="grid lg:grid-cols-2 gap-8">
         <CardSkeleton />
@@ -72,31 +75,47 @@ export default function OwnerDocumentDetail() {
     return <p className="text-muted-foreground">Document not found.</p>;
   }
 
-  const handleGrant = () => {
-    const viewer = MOCK_VIEWERS.find((v) => v.id === selectedViewer);
-    if (!viewer) return;
-    setSharedWith((prev) => [
-      ...prev,
-      {
-        viewerId: viewer.id,
-        viewerName: viewer.name,
-        viewerWallet: viewer.wallet,
-        grantedAt: new Date().toISOString(),
-      },
-    ]);
-    setSelectedViewer("");
-    toast.success(`Access granted to ${viewer.name}`);
+  const handleGrant = async () => {
+    if (!selectedViewer) return;
+    const viewer = viewerList?.find((v) => v.id === selectedViewer);
+    try {
+      if (connectedAPI && doc.onchainTokenId && viewer?.wallet) {
+        const tokenId = BigInt(doc.onchainTokenId);
+        const viewerPk = decodeShieldedAddress(viewer.wallet);
+        const { txId } = await callGrantAccess(connectedAPI, tokenId, viewerPk);
+        await grantAccess.mutateAsync({ documentId: id!, viewerId: selectedViewer });
+        setSelectedViewer("");
+        toast.success(`Access granted to ${viewer.name} · tx ${txId.slice(0, 10)}…`);
+      } else {
+        await grantAccess.mutateAsync({ documentId: id!, viewerId: selectedViewer });
+        setSelectedViewer("");
+        toast.success(`Access granted to ${viewer?.name ?? "viewer"}`);
+      }
+    } catch {
+      toast.error("Failed to grant access");
+    }
   };
 
-  const handleRevoke = (viewerId: string) => {
-    const viewer = sharedWith.find((v) => v.viewerId === viewerId);
-    setSharedWith((prev) => prev.filter((v) => v.viewerId !== viewerId));
-    toast.success(`Access revoked for ${viewer?.viewerName}`);
+  const handleRevoke = async (viewerId: string, viewerName: string) => {
+    const viewerWallet = sharedWith?.find((s) => s.viewerId === viewerId)?.viewer.wallet;
+    try {
+      if (connectedAPI && doc.onchainTokenId && viewerWallet) {
+        const tokenId = BigInt(doc.onchainTokenId);
+        const viewerPk = decodeShieldedAddress(viewerWallet);
+        const { txId } = await callRevokeAccess(connectedAPI, tokenId, viewerPk);
+        await revokeAccess.mutateAsync({ documentId: id!, viewerId });
+        toast.success(`Access revoked for ${viewerName} · tx ${txId.slice(0, 10)}…`);
+      } else {
+        await revokeAccess.mutateAsync({ documentId: id!, viewerId });
+        toast.success(`Access revoked for ${viewerName}`);
+      }
+    } catch {
+      toast.error("Failed to revoke access");
+    }
   };
 
-  const availableViewers = MOCK_VIEWERS.filter(
-    (v) => !sharedWith.some((s) => s.viewerId === v.id),
-  );
+  const grantedViewerIds = new Set(sharedWith?.map((s) => s.viewerId) ?? []);
+  const availableViewers = viewerList?.filter((v) => !grantedViewerIds.has(v.id)) ?? [];
 
   return (
     <div>
@@ -126,8 +145,8 @@ export default function OwnerDocumentDetail() {
             {doc.description}
           </p>
           <p className="text-xs text-muted-foreground">
-            By {doc.creatorName} ·{" "}
-            {new Date(doc.createdAt).toLocaleDateString()} · Base Sepolia
+            By {doc.creator?.name ?? "Unknown"} ·{" "}
+            {new Date(doc.createdAt).toLocaleDateString()} · Midnight Preprod
           </p>
 
           <Collapsible
@@ -150,24 +169,24 @@ export default function OwnerDocumentDetail() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Contract</span>
                 <a
-                  href={`https://sepolia.basescan.org/token/${doc.contractAddress}`}
+                  href={`https://midnight-explorer.preprod.midnight.network/contracts/${doc.contractAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline font-mono flex items-center gap-1"
                 >
-                  {truncateAddress(doc.contractAddress)}{" "}
+                  {truncateAddress(doc.contractAddress ?? "")}{" "}
                   <ExternalLink size={12} />
                 </a>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Tx Hash</span>
                 <a
-                  href={`https://sepolia.basescan.org/tx/${doc.txHash}`}
+                  href={`https://midnight-explorer.preprod.midnight.network/transactions/${doc.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline font-mono flex items-center gap-1"
                 >
-                  {truncateAddress(doc.txHash)} <ExternalLink size={12} />
+                  {truncateAddress(doc.txHash ?? "")} <ExternalLink size={12} />
                 </a>
               </div>
             </CollapsibleContent>
@@ -197,21 +216,21 @@ export default function OwnerDocumentDetail() {
                       value={v.id}
                       className="text-foreground"
                     >
-                      {v.name} · {truncateAddress(v.wallet)}
+                      {v.name} · {v.wallet ? truncateAddress(v.wallet) : v.email}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Button
                 onClick={handleGrant}
-                disabled={!selectedViewer}
+                disabled={!selectedViewer || grantAccess.isPending}
                 className="gradient-primary text-primary-foreground rounded-xl glow-primary"
               >
                 Grant
               </Button>
             </div>
 
-            {sharedWith.length > 0 && (
+            {sharedWith && sharedWith.length > 0 && (
               <div className="space-y-3">
                 {sharedWith.map((s) => (
                   <div
@@ -220,10 +239,12 @@ export default function OwnerDocumentDetail() {
                   >
                     <div>
                       <p className="text-sm text-foreground font-medium">
-                        {s.viewerName}
+                        {s.viewer.name}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">
-                        {truncateAddress(s.viewerWallet)}
+                        {s.viewer.wallet
+                          ? truncateAddress(s.viewer.wallet)
+                          : s.viewer.email}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Granted {new Date(s.grantedAt).toLocaleDateString()}
@@ -238,7 +259,7 @@ export default function OwnerDocumentDetail() {
                       <AlertDialogContent className="bg-card border-border">
                         <AlertDialogHeader>
                           <AlertDialogTitle className="text-foreground">
-                            Revoke access for {s.viewerName}?
+                            Revoke access for {s.viewer.name}?
                           </AlertDialogTitle>
                           <AlertDialogDescription className="text-muted-foreground">
                             They will no longer be able to view this document.
@@ -249,7 +270,7 @@ export default function OwnerDocumentDetail() {
                             Cancel
                           </AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => handleRevoke(s.viewerId)}
+                            onClick={() => handleRevoke(s.viewerId, s.viewer.name)}
                             className="bg-destructive text-destructive-foreground"
                           >
                             Revoke
@@ -272,7 +293,7 @@ export default function OwnerDocumentDetail() {
               Verified on-chain access history
             </p>
 
-            {accessLogs.length === 0 ? (
+            {!accessLogs || accessLogs.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No views yet. Access events will appear here when a Viewer signs
                 in.
@@ -287,7 +308,7 @@ export default function OwnerDocumentDetail() {
                     <Eye size={16} className="text-primary mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-foreground">
-                        <span className="font-medium">{log.viewerName}</span>{" "}
+                        <span className="font-medium">{log.viewer.name}</span>{" "}
                         accessed this document
                       </p>
                       <p className="text-xs text-muted-foreground">

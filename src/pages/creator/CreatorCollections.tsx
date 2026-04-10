@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { MOCK_COLLECTIONS, MOCK_DOCUMENTS, simulateDelay } from "@/mock/data";
+import { useState } from "react";
+import { useCollections, useCreateCollection, useCollection } from "@/hooks/useCollections";
 import { Button } from "@/components/ui/button";
 import { Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
@@ -17,22 +17,56 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import type { ApiCollection } from "@/api/collections";
+import type { ApiDocument } from "@/api/documents";
+
+function CollectionDocuments({ collectionId }: { collectionId: string }) {
+  const { data: col } = useCollection(collectionId);
+  if (!col) return null;
+
+  const docs = col.documents as unknown as ApiDocument[];
+
+  return (
+    <div className="divide-y divide-border">
+      {docs.map((doc) => (
+        <div
+          key={doc.id}
+          className="p-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-foreground font-medium">{doc.title}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <CategoryBadge category={doc.category} />
+              <StatusBadge status={doc.status} />
+              <WalletAddress address={doc.ownerWallet} />
+              <span className="text-xs text-muted-foreground">
+                {new Date(doc.createdAt).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function CreatorCollections() {
-  const [loading, setLoading] = useState(true);
+  const { data: collections, isLoading } = useCollections();
+  const createCollection = useCreateCollection();
   const [expandedCol, setExpandedCol] = useState<string | null>(null);
   const [newColName, setNewColName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  useEffect(() => {
-    simulateDelay().then(() => setLoading(false));
-  }, []);
-
-  const handleCreateCollection = () => {
+  const handleCreateCollection = async () => {
     if (!newColName.trim()) return;
-    toast.success(`Collection "${newColName}" created!`);
-    setNewColName("");
-    setDialogOpen(false);
+    try {
+      await createCollection.mutateAsync({ name: newColName });
+      toast.success(`Collection "${newColName}" created!`);
+      setNewColName("");
+      setDialogOpen(false);
+    } catch {
+      toast.error("Failed to create collection");
+    }
   };
 
   return (
@@ -68,22 +102,23 @@ export default function CreatorCollections() {
               </div>
               <Button
                 onClick={handleCreateCollection}
+                disabled={createCollection.isPending}
                 className="w-full gradient-primary text-primary-foreground rounded-xl"
               >
-                Create
+                {createCollection.isPending ? "Creating..." : "Create"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="space-y-4">
           <CardSkeleton />
           <CardSkeleton />
           <CardSkeleton />
         </div>
-      ) : MOCK_COLLECTIONS.length === 0 ? (
+      ) : !collections || collections.length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={48} />}
           title="No collections yet"
@@ -91,10 +126,7 @@ export default function CreatorCollections() {
         />
       ) : (
         <div className="space-y-4">
-          {MOCK_COLLECTIONS.map((col) => {
-            const docs = MOCK_DOCUMENTS.filter(
-              (d) => d.collectionId === col.id,
-            );
+          {collections.map((col: ApiCollection) => {
             const isExpanded = expandedCol === col.id;
 
             return (
@@ -111,7 +143,7 @@ export default function CreatorCollections() {
                       {col.name}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      {col.documentCount} documents · Created{" "}
+                      {col.documents.length} documents · Created{" "}
                       {new Date(col.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -124,33 +156,12 @@ export default function CreatorCollections() {
 
                 {isExpanded && (
                   <div className="border-t border-border">
-                    {docs.length === 0 ? (
+                    {col.documents.length === 0 ? (
                       <p className="p-6 text-sm text-muted-foreground">
                         No documents in this collection.
                       </p>
                     ) : (
-                      <div className="divide-y divide-border">
-                        {docs.map((doc) => (
-                          <div
-                            key={doc.id}
-                            className="p-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-foreground font-medium">
-                                {doc.title}
-                              </p>
-                              <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <CategoryBadge category={doc.category} />
-                                <StatusBadge status={doc.status} />
-                                <WalletAddress address={doc.ownerWallet} />
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(doc.createdAt).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <CollectionDocuments collectionId={col.id} />
                     )}
                   </div>
                 )}

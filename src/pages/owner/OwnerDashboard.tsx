@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MOCK_DOCUMENTS, simulateDelay, DocumentCategory } from "@/mock/data";
+import { useDocuments } from "@/hooks/useDocuments";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
 import { CategoryBadge, NftBadge } from "@/components/Badges";
-import { WalletAddress } from "@/components/WalletAddress";
 import { FilePreview } from "@/components/FilePreview";
 import { EmptyState } from "@/components/EmptyState";
 import {
@@ -14,17 +13,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FolderOpen } from "lucide-react";
+import type { ApiDocument } from "@/api/documents";
 
 export default function OwnerDashboard() {
-  const [loading, setLoading] = useState(true);
+  const { data: rawDocs, isLoading } = useDocuments();
   const [sortBy, setSortBy] = useState("newest");
   const [filterCategory, setFilterCategory] = useState<string>("all");
 
-  useEffect(() => {
-    simulateDelay().then(() => setLoading(false));
-  }, []);
-
-  let docs = [...MOCK_DOCUMENTS];
+  let docs: ApiDocument[] = rawDocs ? [...rawDocs] : [];
   if (filterCategory !== "all")
     docs = docs.filter((d) => d.category === filterCategory);
   if (sortBy === "newest")
@@ -78,7 +74,7 @@ export default function OwnerDashboard() {
         </Select>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           <CardSkeleton />
           <CardSkeleton />
@@ -109,7 +105,7 @@ export default function OwnerDashboard() {
                     {doc.title}
                   </h3>
                   <p className="text-xs text-muted-foreground mb-1">
-                    By: {doc.creatorName}
+                    By: {doc.creator?.name ?? "Unknown"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {new Date(doc.createdAt).toLocaleDateString()}

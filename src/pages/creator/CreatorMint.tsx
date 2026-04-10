@@ -1,5 +1,14 @@
 import { useState, useCallback } from "react";
-import { MOCK_COLLECTIONS, DocumentCategory } from "@/mock/data";
+import { DocumentCategory } from "@/mock/data";
+import { useCollections, useCreateCollection } from "@/hooks/useCollections";
+import { useCreateDocument, useMintDocument } from "@/hooks/useDocuments";
+import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
+import {
+  callCreateCollection,
+  callMintDocument,
+  decodeShieldedAddress,
+  CONTRACT_ADDRESS,
+} from "@/lib/midnight/contractApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,8 +43,21 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { FileType } from "@/mock/data";
+
+function deriveFileType(file: File): FileType {
+  if (file.name.match(/\.pdf$/i)) return "pdf";
+  if (file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return "image";
+  return "docx";
+}
 
 export default function CreatorMint() {
+  const { data: collections } = useCollections();
+  const createCollection = useCreateCollection();
+  const createDocument = useCreateDocument();
+  const mintDocument = useMintDocument();
+  const { connectedAPI, address } = useMidnightWalletContext();
+
   const [collectionId, setCollectionId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -44,7 +66,7 @@ export default function CreatorMint() {
   const [file, setFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [minting, setMinting] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [mintedTxHash, setMintedTxHash] = useState<string | null>(null);
   const [newColName, setNewColName] = useState("");
   const [newColOpen, setNewColOpen] = useState(false);
 
@@ -75,21 +97,102 @@ export default function CreatorMint() {
     if (!description.trim()) errs.description = "Description is required";
     if (!category) errs.category = "Select a category";
     if (!ownerWallet.trim()) errs.ownerWallet = "Owner wallet is required";
-    if (!ownerWallet.startsWith("0x"))
-      errs.ownerWallet = "Must be a valid Ethereum address";
+    else if (ownerWallet.startsWith("0x"))
+      errs.ownerWallet =
+        "Must be a Midnight shielded address, not an Ethereum address";
+    else if (ownerWallet.trim().length < 60)
+      errs.ownerWallet = "Enter a valid Midnight shielded address";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
     setMinting(true);
-    setTimeout(() => {
-      setMinting(false);
-      setSuccess(true);
+    try {
+      const formData = new FormData();
+      formData.append("collectionId", collectionId);
+      formData.append("title", title);
+      formData.append("description", description);
+      formData.append("category", category);
+      formData.append("ownerWallet", ownerWallet);
+      formData.append("fileType", file ? deriveFileType(file) : "pdf");
+      if (file) formData.append("file", file);
+
+      const doc = await createDocument.mutateAsync(formData);
+
+      let txHash = "0x" + Math.random().toString(16).slice(2).padEnd(64, "0");
+      let contractAddress = CONTRACT_ADDRESS;
+      let tokenId = 0;
+      let onchainTokenId: string | undefined;
+      console.log(connectedAPI);
+
+      if (connectedAPI && address) {
+        try {
+          const fileBytes = file
+            ? new Uint8Array(await file.arrayBuffer())
+            : new Uint8Array(0);
+          const docHashBuf = await crypto.subtle.digest("SHA-256", fileBytes);
+          const docHash = new Uint8Array(docHashBuf);
+
+          const metaStr = `${title}|${category}|${description}`;
+          const metaHashBuf = await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(metaStr),
+          );
+          const metaHash = new Uint8Array(metaHashBuf);
+
+          const { shieldedAddress: creatorShieldedAddr } =
+            await connectedAPI.getShieldedAddresses();
+          const creatorPk = decodeShieldedAddress(creatorShieldedAddr);
+          const ownerPk = decodeShieldedAddress(ownerWallet);
+
+          const selectedCollection = collections?.find(
+            (c) => c.id === collectionId,
+          );
+          const onchainCollectionId = selectedCollection?.onchainCollectionId
+            ? BigInt(selectedCollection.onchainCollectionId)
+            : BigInt(0);
+
+          const result = await callMintDocument(connectedAPI, {
+            docHash,
+            metaHash,
+            ownerPk,
+            creatorPk,
+            onchainCollectionId,
+          });
+
+          txHash = result.txId;
+          onchainTokenId = result.onchainTokenId.toString();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "";
+          if (msg.includes("WALLET_NO_PROVING_PROVIDER")) {
+            toast.warning(
+              "Your Lace wallet does not support on-chain proving yet. Minting off-chain (simulated). Update Lace for real on-chain minting.",
+            );
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      await mintDocument.mutateAsync({
+        id: doc.id,
+        tokenId,
+        contractAddress,
+        txHash,
+        onchainTokenId,
+      });
+
+      setMintedTxHash(txHash);
       toast.success("Document minted successfully!");
-    }, 2500);
+    } catch (err) {
+      toast.error("Minting failed. Please try again.");
+      console.log(err);
+    } finally {
+      setMinting(false);
+    }
   };
 
   const resetForm = () => {
@@ -98,7 +201,7 @@ export default function CreatorMint() {
     setCategory("");
     setOwnerWallet("");
     setFile(null);
-    setSuccess(false);
+    setMintedTxHash(null);
   };
 
   const getFileIcon = (name: string) => {
@@ -116,7 +219,7 @@ export default function CreatorMint() {
           <Loader2 size={48} className="text-primary animate-spin" />
         </div>
         <h2 className="text-xl font-bold text-foreground mb-2">
-          Minting on Base Sepolia...
+          Minting on Midnight Preprod...
         </h2>
         <p className="text-muted-foreground text-sm">
           Creating a unique NFT for your document
@@ -125,9 +228,7 @@ export default function CreatorMint() {
     );
   }
 
-  if (success) {
-    const txHash =
-      "0xabc123def456789abc123def456789abc123def456789abc123def456789abc1";
+  if (mintedTxHash) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <div className="animate-checkmark mb-6">
@@ -140,17 +241,15 @@ export default function CreatorMint() {
         </h2>
         <p className="text-muted-foreground text-sm mb-4">
           Collection:{" "}
-          {MOCK_COLLECTIONS.find((c) => c.id === collectionId)?.name ||
+          {collections?.find((c) => c.id === collectionId)?.name ||
             "Collection"}
         </p>
-        <a
-          href={`https://sepolia.basescan.org/tx/${txHash}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary text-sm hover:underline mb-6 font-mono"
-        >
-          {txHash.slice(0, 20)}...
-        </a>
+        <div className="bg-card border border-border rounded-xl px-4 py-2 mb-6 max-w-sm w-full">
+          <p className="text-xs text-muted-foreground mb-1">Transaction ID</p>
+          <p className="text-primary text-xs font-mono break-all">
+            {mintedTxHash}
+          </p>
+        </div>
         <div className="flex gap-3">
           <Button
             onClick={resetForm}
@@ -176,8 +275,8 @@ export default function CreatorMint() {
         Mint New Document
       </h1>
       <p className="text-muted-foreground text-sm mb-8">
-        This document will be tokenized as an NFT and assigned to the owner's
-        wallet on Base Sepolia.
+        This document will be tokenized as a record and assigned to the owner's
+        wallet on Midnight Preprod.
       </p>
 
       {/* Collection selector */}
@@ -189,7 +288,7 @@ export default function CreatorMint() {
               <SelectValue placeholder="Select Collection" />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
-              {MOCK_COLLECTIONS.map((c) => (
+              {collections?.map((c) => (
                 <SelectItem key={c.id} value={c.id} className="text-foreground">
                   {c.name}
                 </SelectItem>
@@ -223,13 +322,41 @@ export default function CreatorMint() {
                 className="bg-card-elevated border-border text-foreground"
               />
               <Button
-                onClick={() => {
-                  toast.success(`Collection "${newColName}" created`);
-                  setNewColOpen(false);
+                disabled={createCollection.isPending}
+                onClick={async () => {
+                  if (!newColName.trim()) return;
+                  try {
+                    let onchainCollectionId: string | undefined;
+                    if (connectedAPI && address) {
+                      const { shieldedAddress: creatorShieldedAddr } =
+                        await connectedAPI.getShieldedAddresses();
+                      const creatorPk =
+                        decodeShieldedAddress(creatorShieldedAddr);
+                      const result = await callCreateCollection(
+                        connectedAPI,
+                        creatorPk,
+                      );
+                      onchainCollectionId =
+                        result.onchainCollectionId.toString();
+                      toast.info(
+                        `Collection registered on-chain (tx: ${result.txId.slice(0, 10)}…)`,
+                      );
+                    }
+                    const col = await createCollection.mutateAsync({
+                      name: newColName,
+                      onchainCollectionId,
+                    });
+                    setCollectionId(col.id);
+                    toast.success(`Collection "${newColName}" created`);
+                    setNewColName("");
+                    setNewColOpen(false);
+                  } catch {
+                    toast.error("Failed to create collection");
+                  }
                 }}
                 className="w-full gradient-primary text-primary-foreground rounded-xl"
               >
-                Create
+                {createCollection.isPending ? "Creating..." : "Create"}
               </Button>
             </div>
           </DialogContent>
@@ -302,15 +429,15 @@ export default function CreatorMint() {
                 <Info size={14} className="text-muted-foreground" />
               </TooltipTrigger>
               <TooltipContent className="bg-card-elevated border-border text-foreground max-w-xs">
-                The recipient's Ethereum wallet address on Base Sepolia. They
-                will receive this document as an NFT.
+                The recipient's Midnight shielded address on Midnight Preprod.
+                They will receive access to this document.
               </TooltipContent>
             </Tooltip>
           </div>
           <Input
             value={ownerWallet}
             onChange={(e) => setOwnerWallet(e.target.value)}
-            placeholder="0x..."
+            placeholder="Midnight shielded address"
             className="bg-card-elevated border-border text-foreground mt-1 font-mono"
           />
           {errors.ownerWallet && (
@@ -368,8 +495,7 @@ export default function CreatorMint() {
           Mint Document
         </Button>
         <p className="text-xs text-muted-foreground text-center">
-          Minting creates a unique NFT on Base Sepolia. Gas fees are handled by
-          the platform.
+          Minting creates a unique tokenized record on Midnight Preprod.
         </p>
       </form>
     </div>

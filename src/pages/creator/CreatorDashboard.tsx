@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { MOCK_COLLECTIONS, MOCK_DOCUMENTS, simulateDelay } from "@/mock/data";
+import { useCollections } from "@/hooks/useCollections";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { FileText, FolderOpen, Users, Plus } from "lucide-react";
@@ -9,21 +8,19 @@ import { EmptyState } from "@/components/EmptyState";
 
 export default function CreatorDashboard() {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { data: collections, isLoading } = useCollections();
 
-  useEffect(() => {
-    simulateDelay().then(() => setLoading(false));
-  }, []);
+  const totalDocs = collections?.reduce((sum, c) => sum + c.documents.length, 0) ?? 0;
 
   const stats = [
     {
       label: "Total Documents Minted",
-      value: MOCK_DOCUMENTS.length,
+      value: totalDocs,
       icon: FileText,
     },
     {
       label: "Active Collections",
-      value: MOCK_COLLECTIONS.length,
+      value: collections?.length ?? 0,
       icon: FolderOpen,
     },
     { label: "Unique Owners", value: 1, icon: Users },
@@ -49,7 +46,7 @@ export default function CreatorDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-        {loading ? (
+        {isLoading ? (
           <>
             <StatSkeleton />
             <StatSkeleton />
@@ -75,26 +72,28 @@ export default function CreatorDashboard() {
       <h2 className="text-xl font-semibold text-foreground mb-4">
         Your Collections
       </h2>
-      {loading ? (
+      {isLoading ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           <CardSkeleton />
           <CardSkeleton />
           <CardSkeleton />
         </div>
-      ) : MOCK_COLLECTIONS.length === 0 ? (
+      ) : !collections || collections.length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={48} />}
           title="No collections yet"
           description="Create your first collection to start minting documents."
           action={
-            <Button className="gradient-primary text-primary-foreground rounded-xl">
-              Create Collection
-            </Button>
+            <Link to="/creator/collections">
+              <Button className="gradient-primary text-primary-foreground rounded-xl">
+                Create Collection
+              </Button>
+            </Link>
           }
         />
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {MOCK_COLLECTIONS.map((col) => (
+          {collections.map((col) => (
             <div
               key={col.id}
               className="bg-card border border-border rounded-2xl p-6 hover:border-primary/30 transition-colors"
@@ -103,7 +102,7 @@ export default function CreatorDashboard() {
                 {col.name}
               </h3>
               <p className="text-sm text-muted-foreground mb-1">
-                {col.documentCount} documents
+                {col.documents.length} documents
               </p>
               <p className="text-xs text-muted-foreground mb-4">
                 Created {new Date(col.createdAt).toLocaleDateString()}

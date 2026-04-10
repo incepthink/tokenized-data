@@ -4,7 +4,11 @@ import { Persona } from "@/mock/data";
 import { AppNavbar } from "@/components/AppNavbar";
 
 export function ProtectedRoute({ requiredPersona }: { requiredPersona: Persona }) {
-  const { persona } = useAuth();
+  const { persona, isInitializing } = useAuth();
+
+  if (isInitializing) {
+    return null;
+  }
 
   if (!persona || persona !== requiredPersona) {
     return <Navigate to="/" replace />;

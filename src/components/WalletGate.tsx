@@ -1,5 +1,6 @@
 import { NexVaultLogo } from "@/components/NexVaultLogo";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+// import { ConnectButton } from "@rainbow-me/rainbowkit"; // Replaced by 1AM Midnight Wallet
+import { MidnightConnectButton } from "@/components/MidnightConnectButton";
 import { Shield } from "lucide-react";
 
 export function WalletGate() {
@@ -11,10 +12,12 @@ export function WalletGate() {
         </div>
         <h2 className="text-xl font-bold text-foreground mb-2">Connect Your Wallet</h2>
         <p className="text-muted-foreground text-sm mb-8">
-          Connect your wallet to continue with NexVault — a blockchain-powered platform for tokenized document exchange on Base.
+          Connect your Lace or 1AM Midnight Wallet to continue with NexVault — a blockchain-powered platform for tokenized document exchange on Midnight.
         </p>
-        <div className="flex justify-center">
-          <ConnectButton />
+        <div className="flex flex-col items-center gap-3 w-full">
+          <MidnightConnectButton walletType="lace" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <MidnightConnectButton walletType="oneam" />
         </div>
       </div>
     </div>

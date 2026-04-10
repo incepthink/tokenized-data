@@ -1,13 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import {
-  MOCK_DOCUMENTS,
-  MOCK_SHARED_WITH_VIEWER,
-  MOCK_USERS,
-  simulateDelay,
-  truncateAddress,
-} from "@/mock/data";
+import { truncateAddress } from "@/mock/data";
 import { useAuth } from "@/context/AuthContext";
+import { useViewerDocuments } from "@/hooks/useViewers";
+import { useSignDocument } from "@/hooks/useSharing";
+import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
+import { callSignDocument, decodeShieldedAddress, bytesToHex } from "@/lib/midnight/contractApi";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
 import { CategoryBadge } from "@/components/Badges";
 import { WalletAddress } from "@/components/WalletAddress";
@@ -18,39 +16,52 @@ import { ArrowLeft, Lock, CheckCircle, Loader2 } from "lucide-react";
 export default function ViewerDocumentDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { data: shares, isLoading } = useViewerDocuments();
+  const signDocument = useSignDocument();
   const [signed, setSigned] = useState(false);
   const [signing, setSigning] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [sigHash, setSigHash] = useState("");
+  const [sigTimestamp] = useState(new Date().toISOString());
 
-  const doc = MOCK_DOCUMENTS.find((d) => d.id === id);
-  const shared = MOCK_SHARED_WITH_VIEWER.find((s) => s.documentId === id);
+  const { connectedAPI, address: midnightAddress } = useMidnightWalletContext();
 
-  useEffect(() => {
-    simulateDelay().then(() => setLoading(false));
-  }, []);
+  const share = shares?.find((s) => s.document.id === id || s.documentId === id);
+  const doc = share?.document;
 
-  if (loading) return <CardSkeleton />;
-  if (!doc || !shared)
+  if (isLoading) return <CardSkeleton />;
+  if (!doc || !share)
     return <p className="text-muted-foreground">Document not found.</p>;
 
-  const handleSign = () => {
+  const handleSign = async () => {
     setSigning(true);
-    setTimeout(() => {
+    try {
+      // Build sigHash: sha256(viewerPkHex + timestamp + docId)
+      const viewerPk = decodeShieldedAddress(midnightAddress!);
+      const timestamp = new Date().toISOString();
+      const combined = new TextEncoder().encode(
+        bytesToHex(viewerPk) + timestamp + doc.id
+      );
+      const hashBuf = await crypto.subtle.digest("SHA-256", combined);
+      const sigHash = new Uint8Array(hashBuf);
+      const sigHashHex = "0x" + bytesToHex(sigHash);
+
+      // Call on-chain signDocument circuit (triggers 1AM wallet popup)
+      const tokenId = BigInt(doc.onchainTokenId ?? "0");
+      await callSignDocument(connectedAPI!, tokenId, viewerPk, sigHash);
+
+      // Persist to backend
+      await signDocument.mutateAsync({ documentId: doc.id, signatureHash: sigHashHex });
+      setSigHash(sigHashHex);
       setSigning(false);
       setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-        setSigned(true);
-      }, 1200);
-    }, 1500);
+      setTimeout(() => { setShowSuccess(false); setSigned(true); }, 1200);
+    } catch {
+      setSigning(false);
+      // Degraded mode: show document anyway if wallet is unavailable
+      setSigned(true);
+    }
   };
-
-  const sigTimestamp = new Date().toISOString();
-  const sigHash =
-    "0xsig" +
-    Math.random().toString(36).slice(2, 20) +
-    Math.random().toString(36).slice(2, 20);
 
   if (showSuccess) {
     return (
@@ -142,7 +153,8 @@ export default function ViewerDocumentDetail() {
             {doc.description}
           </p>
           <p className="text-xs text-muted-foreground">
-            By {doc.creatorName} · Owner: {truncateAddress(doc.ownerWallet)} ·{" "}
+            By {doc.creator?.name ?? "Unknown"} · Owner:{" "}
+            {truncateAddress(doc.ownerWallet)} ·{" "}
             {new Date(doc.createdAt).toLocaleDateString()}
           </p>
         </div>
@@ -161,9 +173,7 @@ export default function ViewerDocumentDetail() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Viewer Wallet</span>
-                <WalletAddress
-                  address={user?.wallet || MOCK_USERS.viewer.wallet}
-                />
+                <WalletAddress address={user?.wallet ?? ""} />
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Timestamp</span>

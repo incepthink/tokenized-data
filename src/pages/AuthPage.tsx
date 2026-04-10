@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAccount } from "wagmi";
+import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
 import { useAuth } from "@/context/AuthContext";
 import { WalletGate } from "@/components/WalletGate";
 import { NexVaultLogo } from "@/components/NexVaultLogo";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 export default function AuthPage() {
   const { persona } = useParams<{ persona: string }>();
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useMidnightWalletContext();
   const { login, signup } = useAuth();
   const navigate = useNavigate();
 
@@ -23,6 +23,7 @@ export default function AuthPage() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
 
   const validPersona = persona as Persona;
   const personaLabel = persona
@@ -41,15 +42,25 @@ export default function AuthPage() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate({ email: loginEmail, password: loginPassword })) return;
-    login(validPersona, loginEmail, loginPassword);
-    toast.success(`Welcome back!`);
-    navigate(`/${validPersona}/dashboard`);
+    setLoading(true);
+    try {
+      await login(validPersona, loginEmail, loginPassword);
+      toast.success(`Welcome back!`);
+      navigate(`/${validPersona}/dashboard`);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Login failed";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !validate({
@@ -59,9 +70,19 @@ export default function AuthPage() {
       })
     )
       return;
-    signup(validPersona, signupName, signupEmail, signupPassword);
-    toast.success(`Account created!`);
-    navigate(`/${validPersona}/dashboard`);
+    setLoading(true);
+    try {
+      await signup(validPersona, signupName, signupEmail, signupPassword, address ?? undefined);
+      toast.success(`Account created!`);
+      navigate(`/${validPersona}/dashboard`);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Signup failed";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -127,9 +148,10 @@ export default function AuthPage() {
               </div>
               <Button
                 type="submit"
+                disabled={loading}
                 className="w-full gradient-primary text-primary-foreground font-semibold rounded-xl glow-primary hover:glow-primary-strong"
               >
-                Login
+                {loading ? "Logging in..." : "Login"}
               </Button>
             </form>
           </TabsContent>
@@ -180,9 +202,10 @@ export default function AuthPage() {
               </div>
               <Button
                 type="submit"
+                disabled={loading}
                 className="w-full gradient-primary text-primary-foreground font-semibold rounded-xl glow-primary hover:glow-primary-strong"
               >
-                Create Account
+                {loading ? "Creating account..." : "Create Account"}
               </Button>
             </form>
           </TabsContent>
