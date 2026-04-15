@@ -156,16 +156,16 @@ export default function CreatorMint() {
             ? BigInt(selectedCollection.onchainCollectionId)
             : BigInt(0);
 
-          const result = await callMintDocument(connectedAPI, {
-            docHash,
-            metaHash,
-            ownerPk,
-            creatorPk,
-            onchainCollectionId,
-          });
+          // const result = await callMintDocument(connectedAPI, {
+          //   docHash,
+          //   metaHash,
+          //   ownerPk,
+          //   creatorPk,
+          //   onchainCollectionId,
+          // });
 
-          txHash = result.txId;
-          onchainTokenId = result.onchainTokenId.toString();
+          // txHash = result.txId;
+          // onchainTokenId = result.onchainTokenId.toString();
         } catch (err) {
           console.log("On-chain minting failed, continuing with backend:", err);
         }

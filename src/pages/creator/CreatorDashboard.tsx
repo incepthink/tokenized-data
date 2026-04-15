@@ -48,8 +48,55 @@ export default function CreatorDashboard() {
             Welcome back, {user?.name}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Here's your creator workspace — follow the steps below if you're just getting started.
+            Here's your creator workspace
           </p>
+
+          {/* Step guide — always visible */}
+          <div className="flex flex-wrap items-start gap-x-3 gap-y-4 mt-6">
+            {[
+              {
+                num: "1",
+                color: "bg-primary/20 text-primary",
+                title: "Create a Collection",
+                desc: "Group related documents into a named folder.",
+              },
+              {
+                num: "2",
+                color: "bg-secondary/20 text-secondary",
+                title: "Mint a Document",
+                desc: "Upload a file and assign it to an owner's wallet.",
+              },
+              {
+                num: "3",
+                color: "bg-success/20 text-success",
+                title: "Owner Gets Access",
+                desc: "The owner can view and sign the document on-chain.",
+              },
+            ].map((step, i) => (
+              <div key={step.num} className="flex items-start gap-3">
+                {i > 0 && (
+                  <span className="text-muted-foreground/40 mt-1 hidden sm:block">
+                    →
+                  </span>
+                )}
+                <div className="flex items-start gap-2">
+                  <div
+                    className={`w-6 h-6 rounded-full ${step.color} text-xs font-bold flex items-center justify-center shrink-0 mt-0.5`}
+                  >
+                    {step.num}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground leading-tight">
+                      {step.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed max-w-[160px]">
+                      {step.desc}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         <Link to="/creator/mint" className="mt-4 sm:mt-0">
           <Button className="gradient-primary text-primary-foreground rounded-xl glow-primary">
@@ -71,9 +118,12 @@ export default function CreatorDashboard() {
                 1
               </div>
               <div>
-                <p className="font-semibold text-foreground text-sm">Create a Collection</p>
+                <p className="font-semibold text-foreground text-sm">
+                  Create a Collection
+                </p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Group related documents together — like a folder for your NFTs.
+                  Group related documents together — like a folder for your
+                  NFTs.
                 </p>
                 <Link
                   to="/creator/collections"
@@ -90,9 +140,12 @@ export default function CreatorDashboard() {
                 2
               </div>
               <div>
-                <p className="font-semibold text-foreground text-sm">Mint a Document</p>
+                <p className="font-semibold text-foreground text-sm">
+                  Mint a Document
+                </p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Upload a file, add details, and assign it to an owner's wallet address.
+                  Upload a file, add details, and assign it to an owner's wallet
+                  address.
                 </p>
                 <Link
                   to="/creator/mint"
@@ -102,7 +155,9 @@ export default function CreatorDashboard() {
                       : "text-primary"
                   }`}
                 >
-                  {collections?.length === 0 ? "Create a collection first" : "Mint a Document →"}
+                  {collections?.length === 0
+                    ? "Create a collection first"
+                    : "Mint a Document →"}
                 </Link>
               </div>
             </div>
@@ -113,9 +168,12 @@ export default function CreatorDashboard() {
                 3
               </div>
               <div>
-                <p className="font-semibold text-foreground text-sm">Owner Gets Access</p>
+                <p className="font-semibold text-foreground text-sm">
+                  Owner Gets Access
+                </p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  The assigned wallet can view and sign the document on the Midnight network.
+                  The assigned wallet can view and sign the document on the
+                  Midnight network.
                 </p>
               </div>
             </div>
@@ -170,7 +228,8 @@ export default function CreatorDashboard() {
             Start by creating a collection
           </h3>
           <p className="text-muted-foreground text-sm text-center max-w-sm mb-6">
-            Collections are folders for your documents. Create one first, then mint documents into it.
+            Collections are folders for your documents. Create one first, then
+            mint documents into it.
           </p>
           <div className="flex gap-3">
             <Link to="/creator/collections">
