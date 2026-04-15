@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCollections, useCreateCollection, useCollection } from "@/hooks/useCollections";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
 import { EmptyState } from "@/components/EmptyState";
@@ -75,7 +76,7 @@ export default function CreatorCollections() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Collections</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            All your document collections
+            Collections group your minted documents. Create a collection first, then mint documents into it.
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -112,6 +113,13 @@ export default function CreatorCollections() {
         </Dialog>
       </div>
 
+      <div className="flex items-center gap-2 mb-6 text-xs text-muted-foreground">
+        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">Step 1</span>
+        <span>Create collections</span>
+        <span className="text-muted-foreground/30">→</span>
+        <span className="text-muted-foreground/50">Step 2: Mint documents</span>
+      </div>
+
       {isLoading ? (
         <div className="space-y-4">
           <CardSkeleton />
@@ -132,7 +140,7 @@ export default function CreatorCollections() {
             return (
               <div
                 key={col.id}
-                className="bg-card border border-border rounded-2xl overflow-hidden"
+                className="bg-card border border-border hover:border-primary/30 rounded-2xl overflow-hidden transition-colors"
               >
                 <button
                   onClick={() => setExpandedCol(isExpanded ? null : col.id)}
@@ -157,9 +165,14 @@ export default function CreatorCollections() {
                 {isExpanded && (
                   <div className="border-t border-border">
                     {col.documents.length === 0 ? (
-                      <p className="p-6 text-sm text-muted-foreground">
-                        No documents in this collection.
-                      </p>
+                      <div className="p-6 flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">No documents yet</p>
+                        <Link to="/creator/mint">
+                          <Button size="sm" className="gradient-primary text-primary-foreground rounded-lg text-xs">
+                            <Plus size={14} className="mr-1" /> Mint First Document
+                          </Button>
+                        </Link>
+                      </div>
                     ) : (
                       <CollectionDocuments collectionId={col.id} />
                     )}

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Link } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -271,13 +272,32 @@ export default function CreatorMint() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      {/* Workflow context banner */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-center gap-3 mb-6">
+        <Info size={16} className="text-primary shrink-0" />
+        <div className="flex-1 text-sm">
+          <span className="text-muted-foreground">Step 2 of 3 — </span>
+          <span className="font-medium text-foreground">Minting a Document</span>
+        </div>
+        <Link to="/creator/collections" className="text-xs text-primary underline underline-offset-2 shrink-0">
+          ← Manage Collections
+        </Link>
+      </div>
+
       <h1 className="text-2xl font-bold text-foreground mb-1">
         Mint New Document
       </h1>
       <p className="text-muted-foreground text-sm mb-8">
-        This document will be tokenized as a record and assigned to the owner's
-        wallet on Midnight Preprod.
+        Upload a file and fill in the details below. The document is hashed, tokenized as an NFT, and the owner's wallet receives access on Midnight Preprod.
       </p>
+
+      {/* Section label: Choose Collection */}
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+          1 · Choose Collection
+        </span>
+        <div className="flex-1 border-t border-border" />
+      </div>
 
       {/* Collection selector */}
       <div className="flex items-end gap-3 mb-6">
@@ -363,6 +383,14 @@ export default function CreatorMint() {
         </Dialog>
       </div>
 
+      {/* Section label: Document Details */}
+      <div className="flex items-center gap-3 mb-5">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+          2 · Document Details
+        </span>
+        <div className="flex-1 border-t border-border" />
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <Label className="text-foreground">Document Title</Label>
@@ -445,6 +473,23 @@ export default function CreatorMint() {
               {errors.ownerWallet}
             </p>
           )}
+          {!ownerWallet && (
+            <p className="text-xs text-muted-foreground/70 mt-1 pl-1">
+              Midnight shielded addresses start with{" "}
+              <code className="font-mono bg-card-elevated px-1 rounded text-foreground/60">
+                ms1q…
+              </code>{" "}
+              and are ~90 characters long.
+            </p>
+          )}
+        </div>
+
+        {/* Section label: Attach File */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+            3 · Attach File
+          </span>
+          <div className="flex-1 border-t border-border" />
         </div>
 
         {/* File Upload */}
@@ -494,6 +539,14 @@ export default function CreatorMint() {
         >
           Mint Document
         </Button>
+        <div className="flex gap-6 justify-center">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CheckCircle size={12} className="text-success/70" /> File hashed on-chain
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <FileText size={12} className="text-primary/70" /> NFT record created
+          </span>
+        </div>
         <p className="text-xs text-muted-foreground text-center">
           Minting creates a unique tokenized record on Midnight Preprod.
         </p>

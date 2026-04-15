@@ -86,7 +86,12 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="relative min-h-screen bg-background bg-midnight-grid flex items-center justify-center p-4">
+      {/* Glow orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-primary/8 rounded-full blur-[140px]" />
+        <div className="absolute top-1/4 right-1/4 w-[300px] h-[300px] bg-secondary/6 rounded-full blur-[100px]" />
+      </div>
       <div className="bg-card border border-border rounded-2xl p-8 max-w-md w-full">
         <div className="flex justify-center mb-6">
           <NexVaultLogo />

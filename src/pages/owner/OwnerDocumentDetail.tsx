@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Eye, ExternalLink } from "lucide-react";
+import { ArrowLeft, Eye, ExternalLink, Info, Shield } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -126,6 +126,15 @@ export default function OwnerDocumentDetail() {
         <ArrowLeft size={16} /> My Documents
       </Link>
 
+      {/* Workflow context banner */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-center gap-3 mb-6">
+        <Info size={16} className="text-primary shrink-0" />
+        <div className="flex-1 text-sm">
+          <span className="text-muted-foreground">Document Detail — </span>
+          <span className="font-medium text-foreground">Grant access to Viewers, then track every sign-in on-chain.</span>
+        </div>
+      </div>
+
       <div className="grid lg:grid-cols-5 gap-8">
         {/* Left - Document detail (3 cols) */}
         <div className="lg:col-span-3">
@@ -134,6 +143,14 @@ export default function OwnerDocumentDetail() {
             fileUrl={doc.fileUrl}
             className="w-full h-64 mb-6"
           />
+          {/* Section label */}
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+              1 · Document Info
+            </span>
+            <div className="flex-1 border-t border-border" />
+          </div>
+
           <h1 className="text-2xl font-bold text-foreground mb-3">
             {doc.title}
           </h1>
@@ -197,12 +214,21 @@ export default function OwnerDocumentDetail() {
         <div className="lg:col-span-2 space-y-6">
           {/* Share card */}
           <div className="bg-card border border-border rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-foreground mb-1">
-              Grant Access
-            </h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Share with a Viewer
-            </p>
+            {/* Section label */}
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+                2 · Grant Access
+              </span>
+              <div className="flex-1 border-t border-border" />
+            </div>
+
+            {/* Contextual hint */}
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5 flex items-start gap-2 mb-4">
+              <Info size={13} className="text-primary shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Granting access lets a Viewer sign and view this document. The permission is recorded on the Midnight blockchain. You can revoke it at any time below.
+              </p>
+            </div>
 
             <div className="flex gap-2 mb-4">
               <Select value={selectedViewer} onValueChange={setSelectedViewer}>
@@ -286,18 +312,30 @@ export default function OwnerDocumentDetail() {
 
           {/* Access Log */}
           <div className="bg-card border border-border rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-foreground mb-1">
-              Who Viewed This Document
-            </h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Verified on-chain access history
-            </p>
+            {/* Section label */}
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+                3 · Access Log
+              </span>
+              <div className="flex-1 border-t border-border" />
+            </div>
+
+            {/* On-chain trust row */}
+            <div className="flex items-center gap-2 mb-4">
+              <Shield size={13} className="text-success shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                Every view event is cryptographically verified and recorded on-chain — tamper-proof.
+              </p>
+            </div>
 
             {!accessLogs || accessLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No views yet. Access events will appear here when a Viewer signs
-                in.
-              </p>
+              <div className="flex flex-col items-center py-6 gap-2">
+                <Eye size={28} className="text-muted-foreground/40 mb-1" />
+                <p className="text-sm text-muted-foreground text-center">No views yet.</p>
+                <p className="text-xs text-muted-foreground/60 text-center max-w-[200px] leading-relaxed">
+                  Access events appear here once a Viewer signs in using their granted access.
+                </p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {accessLogs.map((log) => (

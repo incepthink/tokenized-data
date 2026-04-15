@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const axiosInstance = axios.create({
-  baseURL: "https://test.hashcase.co/api",
+  baseURL: "https://test.hashcase.co/api", // https://test.hashcase.co/api
 });
 
 axiosInstance.interceptors.request.use((config) => {
