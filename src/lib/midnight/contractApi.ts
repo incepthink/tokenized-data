@@ -249,10 +249,22 @@ async function proveBalanceSubmit(
     // }
     const provingProvider =
       await connectedAPI.getProvingProvider(keyMaterialProvider);
-    console.log(
-      "[proveBalanceSubmit] provingProvider obtained:",
-      provingProvider,
-    );
+
+    // ── DEBUG: inspect what the wallet actually returned ──────────────────────
+    console.log("[proveBalanceSubmit] provingProvider raw value:", provingProvider);
+    console.log("[proveBalanceSubmit] provingProvider typeof:", typeof provingProvider);
+    console.log("[proveBalanceSubmit] provingProvider is null?", provingProvider == null);
+    if (provingProvider != null) {
+      console.log("[proveBalanceSubmit] provingProvider constructor:", (provingProvider as any)?.constructor?.name);
+      console.log("[proveBalanceSubmit] provingProvider own keys:", Object.keys(provingProvider as object));
+      console.log("[proveBalanceSubmit] provingProvider prototype keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(provingProvider as object)));
+      console.log("[proveBalanceSubmit] typeof provingProvider.prove:", typeof (provingProvider as any).prove);
+      // Log every enumerable property and its type
+      for (const key of Object.keys(provingProvider as object)) {
+        console.log(`[proveBalanceSubmit]   .${key} =>`, typeof (provingProvider as any)[key], (provingProvider as any)[key]);
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const provenBytes = await provingProvider.prove(
       serializedPreimage,

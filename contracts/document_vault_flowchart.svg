@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" font-family="system-ui, -apple-system, sans-serif">
+
+  <defs>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowGrey" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="560" fill="#f8fafc" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="34" text-anchor="middle" font-size="17" font-weight="700" fill="#1a1a2e">Document Vault — Contract Flow</text>
+  <text x="450" y="52" text-anchor="middle" font-size="11" fill="#6b7280">document_vault.compact on Midnight Network</text>
+
+  <!-- ── Swimlane backgrounds ── -->
+  <rect x="16" y="64" width="270" height="360" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <rect x="306" y="64" width="270" height="360" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <rect x="596" y="64" width="288" height="360" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+
+  <!-- ── Swimlane headers ── -->
+  <rect x="16" y="64" width="270" height="36" rx="8" fill="#16a34a"/>
+  <rect x="16" y="86" width="270" height="14" fill="#16a34a"/>
+  <text x="151" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="white">CREATOR</text>
+
+  <rect x="306" y="64" width="270" height="36" rx="8" fill="#2563eb"/>
+  <rect x="306" y="86" width="270" height="14" fill="#2563eb"/>
+  <text x="441" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="white">OWNER</text>
+
+  <rect x="596" y="64" width="288" height="36" rx="8" fill="#ea580c"/>
+  <rect x="596" y="86" width="288" height="14" fill="#ea580c"/>
+  <text x="740" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="white">VIEWER</text>
+
+  <!-- ════ STEP 1: createCollection ════ -->
+  <circle cx="46" cy="140" r="12" fill="#16a34a"/>
+  <text x="46" y="145" text-anchor="middle" font-size="11" font-weight="700" fill="white">1</text>
+
+  <rect x="66" y="126" width="200" height="46" rx="6" fill="white" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="166" y="143" text-anchor="middle" font-size="12" font-weight="700" fill="#15803d">createCollection</text>
+  <text x="166" y="158" text-anchor="middle" font-size="10" fill="#555">in: creatorPk  out: collectionId</text>
+
+  <!-- Step 1 output note -->
+  <rect x="76" y="180" width="180" height="22" rx="5" fill="#dcfce7" stroke="#86efac"/>
+  <text x="166" y="195" text-anchor="middle" font-size="10" fill="#166534">writes: collectionOwner[colId]</text>
+
+  <!-- Arrow 1 to 2 -->
+  <line x1="151" y1="202" x2="151" y2="230" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowGreen)"/>
+
+  <!-- ════ STEP 2: mintDocument ════ -->
+  <circle cx="46" cy="248" r="12" fill="#16a34a"/>
+  <text x="46" y="253" text-anchor="middle" font-size="11" font-weight="700" fill="white">2</text>
+
+  <rect x="66" y="234" width="200" height="46" rx="6" fill="white" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="166" y="251" text-anchor="middle" font-size="12" font-weight="700" fill="#15803d">mintDocument</text>
+  <text x="166" y="266" text-anchor="middle" font-size="10" fill="#555">in: docHash, metaHash, ownerPk, colId</text>
+
+  <!-- Step 2 output note -->
+  <rect x="76" y="288" width="180" height="34" rx="5" fill="#dcfce7" stroke="#86efac"/>
+  <text x="166" y="302" text-anchor="middle" font-size="10" fill="#166534">writes: docHash, metaHash,</text>
+  <text x="166" y="314" text-anchor="middle" font-size="10" fill="#166534">ownerPk, creatorPk, docCollection</text>
+
+  <!-- ════ STEP 3: grantAccess ════ -->
+  <circle cx="336" cy="140" r="12" fill="#2563eb"/>
+  <text x="336" y="145" text-anchor="middle" font-size="11" font-weight="700" fill="white">3</text>
+
+  <rect x="356" y="126" width="200" height="46" rx="6" fill="white" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="456" y="143" text-anchor="middle" font-size="12" font-weight="700" fill="#1d4ed8">grantAccess</text>
+  <text x="456" y="158" text-anchor="middle" font-size="10" fill="#555">in: tokenId, viewerPk</text>
+
+  <rect x="356" y="180" width="200" height="34" rx="5" fill="#e0e7ff" stroke="#93c5fd"/>
+  <text x="456" y="194" text-anchor="middle" font-size="10" fill="#1e40af">ZK: proves ownerSecretKey</text>
+  <text x="456" y="206" text-anchor="middle" font-size="10" fill="#1e40af">writes: accessGrants[key] = true</text>
+
+  <!-- Arrow 3 to 4 (down) -->
+  <line x1="441" y1="214" x2="441" y2="242" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowBlue)"/>
+
+  <!-- ════ STEP 4: revokeAccess ════ -->
+  <circle cx="336" cy="258" r="12" fill="#2563eb"/>
+  <text x="336" y="263" text-anchor="middle" font-size="11" font-weight="700" fill="white">4</text>
+
+  <rect x="356" y="244" width="200" height="46" rx="6" fill="white" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="456" y="261" text-anchor="middle" font-size="12" font-weight="700" fill="#1d4ed8">revokeAccess</text>
+  <text x="456" y="276" text-anchor="middle" font-size="10" fill="#555">in: tokenId, viewerPk</text>
+
+  <rect x="356" y="298" width="200" height="34" rx="5" fill="#e0e7ff" stroke="#93c5fd"/>
+  <text x="456" y="312" text-anchor="middle" font-size="10" fill="#1e40af">ZK: proves ownerSecretKey</text>
+  <text x="456" y="324" text-anchor="middle" font-size="10" fill="#1e40af">writes: accessGrants[key] = false</text>
+
+  <!-- ════ STEP 5: signDocument ════ -->
+  <circle cx="626" cy="198" r="12" fill="#ea580c"/>
+  <text x="626" y="203" text-anchor="middle" font-size="11" font-weight="700" fill="white">5</text>
+
+  <rect x="646" y="184" width="220" height="46" rx="6" fill="white" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="756" y="201" text-anchor="middle" font-size="12" font-weight="700" fill="#c2410c">signDocument</text>
+  <text x="756" y="216" text-anchor="middle" font-size="10" fill="#555">in: tokenId, viewerPk, sigHash</text>
+
+  <rect x="646" y="238" width="220" height="46" rx="5" fill="#ffedd5" stroke="#fdba74"/>
+  <text x="756" y="252" text-anchor="middle" font-size="10" fill="#9a3412">ZK: proves viewerSecretKey</text>
+  <text x="756" y="264" text-anchor="middle" font-size="10" fill="#9a3412">checks: accessGrants[key] == true</text>
+  <text x="756" y="276" text-anchor="middle" font-size="10" fill="#9a3412">writes: accessLogs[key] = sigHash</text>
+
+  <!-- ════ CROSS-LANE ARROWS ════ -->
+  <!-- Step 2 -> Step 3: tokenId crosses Creator -> Owner -->
+  <path d="M266 258 Q286 258 306 155" stroke="#6b7280" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arrowGrey)"/>
+  <rect x="260" y="272" width="56" height="16" rx="4" fill="#e5e7eb"/>
+  <text x="288" y="284" text-anchor="middle" font-size="9" fill="#374151" font-weight="600">tokenId</text>
+
+  <!-- Step 3 -> Step 5: tokenId + viewerPk crosses Owner -> Viewer -->
+  <path d="M556 155 Q576 155 596 210" stroke="#6b7280" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arrowGrey)"/>
+  <rect x="548" y="140" width="56" height="16" rx="4" fill="#e5e7eb"/>
+  <text x="576" y="152" text-anchor="middle" font-size="9" fill="#374151" font-weight="600">tokenId</text>
+
+  <!-- ════ LEDGER STATE (bottom) ════ -->
+  <rect x="16" y="444" width="868" height="100" rx="8" fill="white" stroke="#d1d5db" stroke-width="1.5"/>
+  <text x="450" y="463" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a2e">On-Chain Ledger State</text>
+
+  <!-- Left group -->
+  <rect x="28" y="470" width="420" height="62" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+  <text x="238" y="485" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">Document Maps  (key: tokenId)</text>
+  <text x="238" y="500" text-anchor="middle" font-size="10" fill="#6b7280">docHash  |  metadataHash  |  ownerPk  |  creatorPk  |  docCollection</text>
+  <text x="238" y="518" text-anchor="middle" font-size="10" fill="#6b7280">collectionOwner  |  tokenCounter  |  collectionCounter</text>
+
+  <!-- Right group -->
+  <rect x="460" y="470" width="412" height="62" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+  <text x="666" y="485" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">Access Maps  (key: hash(tokenId, viewerPk))</text>
+  <text x="666" y="500" text-anchor="middle" font-size="10" fill="#6b7280">accessGrants: Boolean (true = granted)</text>
+  <text x="666" y="518" text-anchor="middle" font-size="10" fill="#9a3412">accessLogs: Bytes[32] sigHash  |  ZK-proven, secret keys never on-chain</text>
+
+  <!-- Vertical connector lines to ledger -->
+  <line x1="151" y1="322" x2="151" y2="444" stroke="#16a34a" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="441" y1="332" x2="441" y2="444" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="756" y1="284" x2="756" y2="444" stroke="#ea580c" stroke-width="1" stroke-dasharray="3,3"/>
+  <polygon points="147,444 155,444 151,452" fill="#16a34a"/>
+  <polygon points="437,444 445,444 441,452" fill="#2563eb"/>
+  <polygon points="752,444 760,444 756,452" fill="#ea580c"/>
+
+</svg>

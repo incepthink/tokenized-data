@@ -11,7 +11,6 @@ import type {
   MidnightWalletAPI,
   MidnightConnectedAPI,
   MidnightNetwork,
-  LaceWalletObject,
 } from "@/lib/midnight/types";
 
 export interface MidnightWalletState {
@@ -48,8 +47,6 @@ const NETWORK: MidnightNetwork = "preprod";
 export function useMidnightWallet(): MidnightWalletState {
   const [oneamWalletAPI, setOneamWalletAPI] =
     useState<MidnightWalletAPI | null>(null);
-  const [laceWalletObject, setLaceWalletObject] =
-    useState<LaceWalletObject | null>(null);
 
   const [isOneamInstalled, setIsOneamInstalled] = useState(false);
   const [isLaceInstalled, setIsLaceInstalled] = useState(false);
@@ -69,10 +66,9 @@ export function useMidnightWallet(): MidnightWalletState {
   useEffect(() => {
     let cancelled = false;
 
-    // Lace is synchronous — check immediately
-    const lace = detectLaceWallet();
-    if (lace && !cancelled) {
-      setLaceWalletObject(lace);
+    // Lace is synchronous — just check if it's installed for the UI flag.
+    // We no longer store the object; connectLace() re-detects fresh each time.
+    if (detectLaceWallet() && !cancelled) {
       setIsLaceInstalled(true);
     }
 
@@ -123,21 +119,55 @@ export function useMidnightWallet(): MidnightWalletState {
   }, [oneamWalletAPI]);
 
   const connectLace = useCallback(async () => {
-    if (!laceWalletObject) {
-      setError("Lace Midnight Wallet is not installed.");
-      return;
-    }
     setIsConnecting(true);
     setError(null);
     try {
-      const laceAPI = await laceWalletObject.connect(NETWORK);
-      console.warn(
-        "[Midnight/Lace] Connected API methods:",
-        Object.getOwnPropertyNames(Object.getPrototypeOf(laceAPI)).concat(
-          Object.keys(laceAPI),
-        ),
-      );
-      const { unshieldedAddress } = await laceAPI.getUnshieldedAddress();
+      // Re-detect Lace fresh every time instead of using the stored reference.
+      // If the extension's background worker restarted (MV3 service workers get
+      // killed by the browser after ~30s of inactivity), the old reference is
+      // dead. detectLaceWallet() reads window.midnight.mnLace right now, which
+      // is always the live injected object.
+      const freshLace = detectLaceWallet();
+      if (!freshLace) {
+        setError("Lace Midnight Wallet is not installed.");
+        return;
+      }
+
+      // Helper that does the actual connect + address fetch.
+      // Defined inline so we can call it twice (initial attempt + one retry).
+      const attemptConnect = async () => {
+        const laceAPI = await freshLace.connect(NETWORK);
+        console.warn(
+          "[Midnight/Lace] Connected API methods:",
+          Object.getOwnPropertyNames(Object.getPrototypeOf(laceAPI)).concat(
+            Object.keys(laceAPI),
+          ),
+        );
+        const { unshieldedAddress } = await laceAPI.getUnshieldedAddress();
+        return { laceAPI, unshieldedAddress };
+      };
+
+      let result: Awaited<ReturnType<typeof attemptConnect>>;
+      try {
+        result = await attemptConnect();
+      } catch (firstErr) {
+        // "channel was shutdown" means the extension's background service worker
+        // was terminated while we were trying to connect. Calling connect() again
+        // sends a new message through the content script, which wakes the worker
+        // back up (or triggers the unlock popup if the wallet is locked).
+        // We retry exactly once — if it fails again we surface the real error.
+        const isShutdown =
+          firstErr instanceof Error &&
+          firstErr.message.toLowerCase().includes("was shutdown");
+
+        if (!isShutdown) throw firstErr; // unrelated error — rethrow immediately
+
+        console.warn("[Midnight/Lace] Channel shutdown detected — retrying once…");
+        result = await attemptConnect(); // second attempt on the freshly-woken worker
+      }
+
+      const { laceAPI, unshieldedAddress } = result;
+
       const adapterAPI = new Proxy(laceAPI, {
         get(target, prop, receiver) {
           if (prop === "walletType") return "lace";
@@ -154,6 +184,7 @@ export function useMidnightWallet(): MidnightWalletState {
           return typeof val === "function" ? val.bind(target) : val;
         },
       }) as unknown as MidnightConnectedAPI;
+
       setConnectedAPI(adapterAPI);
       setAddress(unshieldedAddress);
       setNetwork(NETWORK);
@@ -166,7 +197,7 @@ export function useMidnightWallet(): MidnightWalletState {
     } finally {
       setIsConnecting(false);
     }
-  }, [laceWalletObject]);
+  }, []);
 
   const disconnect = useCallback(() => {
     setIsConnected(false);
