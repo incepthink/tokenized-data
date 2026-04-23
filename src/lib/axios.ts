@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const axiosInstance = axios.create({
-  baseURL: "http://localhost:5000/api", // https://test.hashcase.co/api
+  baseURL: "https://test.hashcase.co/api", // https://test.hashcase.co/api
 });
 
 export const axiosInstanceImage = axios.create({

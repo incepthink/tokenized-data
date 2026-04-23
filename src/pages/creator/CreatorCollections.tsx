@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useCollections, useCreateCollection, useCollection } from "@/hooks/useCollections";
+import { useDocument } from "@/hooks/useDocuments";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
 import { EmptyState } from "@/components/EmptyState";
 import { CategoryBadge, StatusBadge } from "@/components/Badges";
 import { WalletAddress } from "@/components/WalletAddress";
+import { FilePreview } from "@/components/FilePreview";
 import { FolderOpen } from "lucide-react";
 import {
   Dialog,
@@ -21,33 +23,110 @@ import { toast } from "sonner";
 import type { ApiCollection } from "@/api/collections";
 import type { ApiDocument } from "@/api/documents";
 
+function DocumentDetailDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const { data: doc, isLoading } = useDocument(id ?? "");
+
+  return (
+    <Dialog open={!!id} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="bg-card border-border max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-foreground">
+            {doc?.title ?? "Document Details"}
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 size={32} className="animate-spin text-primary" />
+          </div>
+        ) : doc ? (
+          <div className="space-y-6">
+            {doc.fileUrl && (
+              <FilePreview fileType={doc.fileType} fileUrl={doc.fileUrl} className="w-full h-64" />
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <CategoryBadge category={doc.category} />
+              <StatusBadge status={doc.status} />
+            </div>
+
+            {doc.description && (
+              <p className="text-sm text-muted-foreground">{doc.description}</p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground block mb-1">Owner Wallet</span>
+                <WalletAddress address={doc.ownerWallet} />
+              </div>
+              <div>
+                <span className="text-muted-foreground block mb-1">Created</span>
+                <span className="text-foreground">{new Date(doc.createdAt).toLocaleDateString()}</span>
+              </div>
+              {doc.tokenId !== null && (
+                <div>
+                  <span className="text-muted-foreground block mb-1">Token ID</span>
+                  <span className="text-foreground font-mono">{doc.tokenId}</span>
+                </div>
+              )}
+              {doc.onchainTokenId && (
+                <div>
+                  <span className="text-muted-foreground block mb-1">Onchain Token ID</span>
+                  <span className="text-foreground font-mono text-xs break-all">{doc.onchainTokenId}</span>
+                </div>
+              )}
+              {doc.contractAddress && (
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground block mb-1">Contract Address</span>
+                  <span className="text-foreground font-mono text-xs break-all">{doc.contractAddress}</span>
+                </div>
+              )}
+              {doc.txHash && (
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground block mb-1">Tx Hash</span>
+                  <span className="text-foreground font-mono text-xs break-all">{doc.txHash}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CollectionDocuments({ collectionId }: { collectionId: string }) {
   const { data: col } = useCollection(collectionId);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   if (!col) return null;
 
   const docs = col.documents as unknown as ApiDocument[];
 
   return (
-    <div className="divide-y divide-border">
-      {docs.map((doc) => (
-        <div
-          key={doc.id}
-          className="p-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-        >
-          <div className="flex-1 min-w-0">
-            <p className="text-foreground font-medium">{doc.title}</p>
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-              <CategoryBadge category={doc.category} />
-              <StatusBadge status={doc.status} />
-              <WalletAddress address={doc.ownerWallet} />
-              <span className="text-xs text-muted-foreground">
-                {new Date(doc.createdAt).toLocaleDateString()}
-              </span>
+    <>
+      <div className="divide-y divide-border">
+        {docs.map((doc) => (
+          <div
+            key={doc.id}
+            onClick={() => setSelectedId(doc.id)}
+            className="p-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-card-elevated/50 transition-colors"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-foreground font-medium">{doc.title}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <CategoryBadge category={doc.category} />
+                <StatusBadge status={doc.status} />
+                <WalletAddress address={doc.ownerWallet} />
+                <span className="text-xs text-muted-foreground">
+                  {new Date(doc.createdAt).toLocaleDateString()}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+      <DocumentDetailDialog id={selectedId} onClose={() => setSelectedId(null)} />
+    </>
   );
 }
 
