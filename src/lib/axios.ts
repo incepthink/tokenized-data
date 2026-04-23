@@ -17,7 +17,9 @@ axiosInstance.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("token");
-      window.location.href = "/examples/tokenized-data/auth";
+      if (!window.location.pathname.includes("/auth")) {
+        window.location.href = "/examples/tokenized-data";
+      }
     }
     return Promise.reject(error);
   },
