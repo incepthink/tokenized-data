@@ -32,10 +32,19 @@ export async function getDocument(id: string): Promise<ApiDocument> {
   return data;
 }
 
-export async function createDocument(formData: FormData): Promise<ApiDocument> {
-  const { data } = await axiosInstance.post<ApiDocument>("/documents", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+export interface CreateDocumentPayload {
+  collectionId: string;
+  title: string;
+  description: string;
+  category: DocumentCategory;
+  ownerWallet: string;
+  ownerEmail: string;
+  fileType: FileType;
+  fileUrl?: string;
+}
+
+export async function createDocument(payload: CreateDocumentPayload): Promise<ApiDocument> {
+  const { data } = await axiosInstance.post<ApiDocument>("/documents", payload);
   return data;
 }
 

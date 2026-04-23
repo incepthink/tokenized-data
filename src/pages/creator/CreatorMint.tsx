@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DocumentCategory } from "@/mock/data";
 import { useCollections, useCreateCollection } from "@/hooks/useCollections";
 import { useCreateDocument, useMintDocument } from "@/hooks/useDocuments";
+import type { CreateDocumentPayload } from "@/api/documents";
 import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
 import {
   callCreateCollection,
@@ -30,7 +31,11 @@ import {
   FileText,
   Image,
   FileSpreadsheet,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
+import { axiosInstance, axiosInstanceImage } from "@/lib/axios";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -44,6 +49,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 import type { FileType } from "@/mock/data";
 
 function deriveFileType(file: File): FileType {
@@ -51,6 +68,9 @@ function deriveFileType(file: File): FileType {
   if (file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return "image";
   return "docx";
 }
+
+const isValidMidnightAddress = (addr: string) =>
+  addr.trim().length >= 60 && !addr.startsWith("0x");
 
 export default function CreatorMint() {
   const { data: collections } = useCollections();
@@ -65,31 +85,79 @@ export default function CreatorMint() {
   const [category, setCategory] = useState<DocumentCategory | "">("");
   const [ownerWallet, setOwnerWallet] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [mintedFileUrl, setMintedFileUrl] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [minting, setMinting] = useState(false);
   const [mintedTxHash, setMintedTxHash] = useState<string | null>(null);
   const [newColName, setNewColName] = useState("");
   const [newColOpen, setNewColOpen] = useState(false);
+  const [ownerEmails, setOwnerEmails] = useState<string[]>([]);
+  const [ownerEmailsLoading, setOwnerEmailsLoading] = useState(false);
+  const [selectedOwnerEmail, setSelectedOwnerEmail] = useState("");
+  const [emailPopoverOpen, setEmailPopoverOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedOwnerEmail("");
+    setOwnerEmails([]);
+    if (!isValidMidnightAddress(ownerWallet)) return;
+    const timer = setTimeout(async () => {
+      setOwnerEmailsLoading(true);
+      try {
+        const { data } = await axiosInstance.get<{
+          owners: { email: string }[];
+        }>(`/documents/owners/${ownerWallet.trim()}`);
+        setOwnerEmails(data.owners.map((o) => o.email));
+      } catch {
+        setOwnerEmails([]);
+      } finally {
+        setOwnerEmailsLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [ownerWallet]);
+
+  const isImageFile = (f: File) => /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name);
+
+  const setFileWithPreview = useCallback((f: File) => {
+    setFile(f);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return isImageFile(f) ? URL.createObjectURL(f) : null;
+    });
+  }, []);
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const f = e.target.files?.[0];
       if (f) {
+        if (!isImageFile(f)) {
+          toast.error("Only image files are accepted (JPG, PNG, GIF, WEBP)");
+          return;
+        }
         if (f.size > 10 * 1024 * 1024) {
           toast.error("File must be under 10MB");
           return;
         }
-        setFile(f);
+        setFileWithPreview(f);
       }
     },
-    [],
+    [setFileWithPreview],
   );
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (f && f.size <= 10 * 1024 * 1024) setFile(f);
-  }, []);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const f = e.dataTransfer.files[0];
+      if (!f) return;
+      if (!isImageFile(f)) {
+        toast.error("Only image files are accepted (JPG, PNG, GIF, WEBP)");
+        return;
+      }
+      if (f.size <= 10 * 1024 * 1024) setFileWithPreview(f);
+    },
+    [setFileWithPreview],
+  );
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -103,6 +171,8 @@ export default function CreatorMint() {
         "Must be a Midnight unshielded address, not an Ethereum address";
     else if (ownerWallet.trim().length < 60)
       errs.ownerWallet = "Enter a valid Midnight unshielded address";
+    if (isValidMidnightAddress(ownerWallet) && !selectedOwnerEmail)
+      errs.ownerEmail = "Select an owner email address";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -112,16 +182,31 @@ export default function CreatorMint() {
     if (!validate()) return;
     setMinting(true);
     try {
-      const formData = new FormData();
-      formData.append("collectionId", collectionId);
-      formData.append("title", title);
-      formData.append("description", description);
-      formData.append("category", category);
-      formData.append("ownerWallet", ownerWallet);
-      formData.append("fileType", file ? deriveFileType(file) : "pdf");
-      if (file) formData.append("file", file);
+      let uploadedImageUrl: string | undefined;
+      if (file) {
+        const imgForm = new FormData();
+        imgForm.append("image", file);
+        const { data: uploadData } = await axiosInstanceImage.post<{
+          success: boolean;
+          imageUrl: string;
+          ipfsHash: string;
+        }>("/platform/upload/image", imgForm);
+        uploadedImageUrl = uploadData.imageUrl;
+      }
 
-      const doc = await createDocument.mutateAsync(formData);
+      const payload: CreateDocumentPayload = {
+        collectionId,
+        title,
+        description,
+        category: category as DocumentCategory,
+        ownerWallet,
+        ownerEmail: selectedOwnerEmail,
+        fileType: file ? deriveFileType(file) : "pdf",
+        ...(uploadedImageUrl ? { fileUrl: uploadedImageUrl } : {}),
+      };
+
+      const doc = await createDocument.mutateAsync(payload);
+      setMintedFileUrl(doc.fileUrl ?? uploadedImageUrl ?? null);
 
       let txHash = "0x" + Math.random().toString(16).slice(2).padEnd(64, "0");
       let contractAddress = CONTRACT_ADDRESS;
@@ -194,7 +279,14 @@ export default function CreatorMint() {
     setDescription("");
     setCategory("");
     setOwnerWallet("");
+    setSelectedOwnerEmail("");
+    setOwnerEmails([]);
     setFile(null);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setMintedFileUrl(null);
     setMintedTxHash(null);
   };
 
@@ -238,6 +330,13 @@ export default function CreatorMint() {
           {collections?.find((c) => c.id === collectionId)?.name ||
             "Collection"}
         </p>
+        {/* {mintedFileUrl && (
+          <img
+            src={`http://localhost:5000${mintedFileUrl}`}
+            alt="Minted document"
+            className="h-36 rounded-xl object-cover border border-border shadow mb-4"
+          />
+        )} */}
         <div className="bg-card border border-border rounded-xl px-4 py-2 mb-6 max-w-sm w-full">
           <p className="text-xs text-muted-foreground mb-1">Transaction ID</p>
           <p className="text-primary text-xs font-mono break-all">
@@ -473,16 +572,93 @@ export default function CreatorMint() {
               {errors.ownerWallet}
             </p>
           )}
-          {/* {!ownerWallet && (
-            <p className="text-xs text-muted-foreground/70 mt-1 pl-1">
-              Midnight unshielded addresses start with{" "}
-              <code className="font-mono bg-card-elevated px-1 rounded text-foreground/60">
-                ms1q…
-              </code>{" "}
-              and are ~90 characters long.
-            </p>
-          )} */}
         </div>
+
+        {isValidMidnightAddress(ownerWallet) && (
+          <div>
+            <Label className="text-foreground">Owner Email Address</Label>
+            <Popover open={emailPopoverOpen} onOpenChange={setEmailPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={emailPopoverOpen}
+                  disabled={
+                    ownerEmailsLoading ||
+                    (!ownerEmailsLoading && ownerEmails.length === 0)
+                  }
+                  className={cn(
+                    "w-full mt-1 justify-between bg-card-elevated border-border text-foreground font-normal",
+                    !selectedOwnerEmail && "text-muted-foreground",
+                  )}
+                >
+                  {ownerEmailsLoading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin" />
+                      Looking up owners...
+                    </span>
+                  ) : selectedOwnerEmail ? (
+                    selectedOwnerEmail
+                  ) : ownerEmails.length === 0 ? (
+                    "No owners found for this wallet"
+                  ) : (
+                    "Select owner email"
+                  )}
+                  {!ownerEmailsLoading && (
+                    <ChevronsUpDown
+                      size={14}
+                      className="ml-2 shrink-0 opacity-50"
+                    />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[--radix-popover-trigger-width] p-0 bg-card border-border"
+                align="start"
+              >
+                <Command>
+                  <CommandInput
+                    placeholder="Search emails..."
+                    className="text-foreground"
+                  />
+                  <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
+                    No matching emails
+                  </CommandEmpty>
+                  <CommandGroup>
+                    {ownerEmails.map((email) => (
+                      <CommandItem
+                        key={email}
+                        value={email}
+                        onSelect={() => {
+                          setSelectedOwnerEmail(email);
+                          setEmailPopoverOpen(false);
+                        }}
+                        className="text-foreground cursor-pointer"
+                      >
+                        <Check
+                          size={14}
+                          className={cn(
+                            "mr-2",
+                            selectedOwnerEmail === email
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />
+                        {email}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {errors.ownerEmail && (
+              <p className="text-destructive text-xs mt-1">
+                {errors.ownerEmail}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Section label: Attach File */}
         <div className="flex items-center gap-3">
@@ -498,9 +674,25 @@ export default function CreatorMint() {
           <div
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
-            className="mt-1 border-2 border-dashed border-primary/30 rounded-2xl p-8 text-center cursor-pointer hover:border-primary/60 transition-colors bg-card-elevated/30"
+            className="relative mt-1 border-2 border-dashed border-primary/30 rounded-2xl p-8 text-center cursor-pointer hover:border-primary/60 transition-colors bg-card-elevated/30"
           >
-            {file ? (
+            {file && imagePreview ? (
+              <div className="flex flex-col items-center gap-3">
+                <img
+                  src={imagePreview}
+                  alt={file.name}
+                  className="h-40 max-w-full rounded-xl object-cover border border-border shadow"
+                />
+                <div className="text-center">
+                  <p className="text-foreground text-sm font-medium">
+                    {file.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(file.size / 1024 / 1024).toFixed(2)} MB · Click to change
+                  </p>
+                </div>
+              </div>
+            ) : file ? (
               <div className="flex items-center justify-center gap-3">
                 {getFileIcon(file.name)}
                 <div className="text-left">
@@ -519,16 +711,15 @@ export default function CreatorMint() {
                   Drag & drop or click to upload
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  JPG, PNG, GIF, WEBP, PDF, DOCX · Max 10MB
+                  JPG, PNG, GIF, WEBP · Only images accepted for now · Max 10MB
                 </p>
               </>
             )}
             <input
               type="file"
-              accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.docx"
+              accept=".jpg,.jpeg,.png,.gif,.webp"
               onChange={handleFileChange}
               className="absolute inset-0 opacity-0 cursor-pointer"
-              style={{ position: "relative" }}
             />
           </div>
         </div>

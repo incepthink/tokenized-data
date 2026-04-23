@@ -5,6 +5,7 @@ import {
   createDocument,
   deleteDocument,
   mintDocument,
+  type CreateDocumentPayload,
 } from "@/api/documents";
 
 export function useDocuments() {
@@ -25,7 +26,7 @@ export function useDocument(id: string) {
 export function useCreateDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (formData: FormData) => createDocument(formData),
+    mutationFn: (payload: CreateDocumentPayload) => createDocument(payload),
     onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["collections", doc.collectionId] });
