@@ -41,6 +41,7 @@ export async function detectMidnightWallet(): Promise<MidnightWalletAPI | null> 
 export function detectLaceWallet(): LaceWalletObject | null {
   const midnight = window.midnight;
   console.log("[Midnight/Lace] window.midnight:", midnight);
+  console.log("[Midnight/Lace] window.midnight keys:", midnight ? Object.keys(midnight) : "null");
   console.log("[Midnight/Lace] window.midnight.mnLace:", (midnight as any)?.mnLace);
   if (!midnight) return null;
 
@@ -61,5 +62,9 @@ export function detectLaceWallet(): LaceWalletObject | null {
 
   const result = lace ? (lace as unknown as LaceWalletObject) : null;
   console.log("[Midnight/Lace] detectLaceWallet result (fallback):", result);
+  if (result) {
+    console.log("[Midnight/Lace] fallback result prototype methods:",
+      Object.getOwnPropertyNames(Object.getPrototypeOf(result as any)));
+  }
   return result;
 }
