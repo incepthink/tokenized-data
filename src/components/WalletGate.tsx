@@ -14,7 +14,7 @@ export function WalletGate() {
         <p className="text-muted-foreground text-sm mb-8">
           Connect your Lace or 1AM Midnight Wallet to continue with NexVault — a blockchain-powered platform for tokenized document exchange on Midnight.
         </p>
-        <div className="flex flex-col items-center gap-3 w-full">
+        <div className="flex flex-col items-center gap-4 w-full">
           <MidnightConnectButton walletType="lace" />
           <span className="text-xs text-muted-foreground">or</span>
           <MidnightConnectButton walletType="oneam" />

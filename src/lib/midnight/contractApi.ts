@@ -3,57 +3,80 @@
 
 import {
   createCircuitContext,
-  proofDataIntoSerializedPreimage,
   ContractState,
 } from "@midnight-ntwrk/compact-runtime";
 import type { ProofData } from "@midnight-ntwrk/compact-runtime";
-import type { KeyMaterialProvider } from "@midnight-ntwrk/dapp-connector-api";
+import { httpClientProvingProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
+import {
+  Intent,
+  ContractCallPrototype,
+  communicationCommitmentRandomness,
+  CostModel,
+  Transaction,
+  ContractState as LedgerContractState,
+} from "@midnight-ntwrk/ledger-v8";
+import type { RunningCost } from "@midnight-ntwrk/ledger-v8";
+import {
+  setNetworkId,
+  getNetworkId,
+} from "@midnight-ntwrk/midnight-js-network-id";
+import { ttlOneHour } from "@midnight-ntwrk/midnight-js-utils";
+import {
+  ZKConfigProvider,
+  createZKIR,
+  createProverKey,
+  createVerifierKey,
+  asContractAddress,
+} from "@midnight-ntwrk/midnight-js-types";
 import { bech32m } from "@scure/base";
 
 import { Contract } from "@/lib/managed/contract";
-import type { MidnightConnectedAPI, MidnightNetwork } from "./types";
+import type {
+  MidnightConnectedAPI,
+  MidnightNetwork,
+} from "./types";
 
 // ZK artifact URL imports — Vite serves these as hashed static assets
-import createCollectionZkir    from "@/lib/managed/zkir/createCollection.zkir?url";
-import mintDocumentZkir        from "@/lib/managed/zkir/mintDocument.zkir?url";
-import grantAccessZkir         from "@/lib/managed/zkir/grantAccess.zkir?url";
-import revokeAccessZkir        from "@/lib/managed/zkir/revokeAccess.zkir?url";
-import signDocumentZkir        from "@/lib/managed/zkir/signDocument.zkir?url";
+import createCollectionZkir from "@/lib/managed/zkir/createCollection.bzkir?url";
+import mintDocumentZkir from "@/lib/managed/zkir/mintDocument.bzkir?url";
+import grantAccessZkir from "@/lib/managed/zkir/grantAccess.bzkir?url";
+import revokeAccessZkir from "@/lib/managed/zkir/revokeAccess.bzkir?url";
+import signDocumentZkir from "@/lib/managed/zkir/signDocument.bzkir?url";
 
-import createCollectionProver  from "@/lib/managed/keys/createCollection.prover?url";
-import mintDocumentProver      from "@/lib/managed/keys/mintDocument.prover?url";
-import grantAccessProver       from "@/lib/managed/keys/grantAccess.prover?url";
-import revokeAccessProver      from "@/lib/managed/keys/revokeAccess.prover?url";
-import signDocumentProver      from "@/lib/managed/keys/signDocument.prover?url";
+import createCollectionProver from "@/lib/managed/keys/createCollection.prover?url";
+import mintDocumentProver from "@/lib/managed/keys/mintDocument.prover?url";
+import grantAccessProver from "@/lib/managed/keys/grantAccess.prover?url";
+import revokeAccessProver from "@/lib/managed/keys/revokeAccess.prover?url";
+import signDocumentProver from "@/lib/managed/keys/signDocument.prover?url";
 
 import createCollectionVerifier from "@/lib/managed/keys/createCollection.verifier?url";
-import mintDocumentVerifier     from "@/lib/managed/keys/mintDocument.verifier?url";
-import grantAccessVerifier      from "@/lib/managed/keys/grantAccess.verifier?url";
-import revokeAccessVerifier     from "@/lib/managed/keys/revokeAccess.verifier?url";
-import signDocumentVerifier     from "@/lib/managed/keys/signDocument.verifier?url";
+import mintDocumentVerifier from "@/lib/managed/keys/mintDocument.verifier?url";
+import grantAccessVerifier from "@/lib/managed/keys/grantAccess.verifier?url";
+import revokeAccessVerifier from "@/lib/managed/keys/revokeAccess.verifier?url";
+import signDocumentVerifier from "@/lib/managed/keys/signDocument.verifier?url";
 
 // ─── ZK artifact URL maps (Vite ?url → hashed static asset paths) ────────────
 
 const ZKIR_URLS: Record<string, string> = {
   createCollection: createCollectionZkir,
-  mintDocument:     mintDocumentZkir,
-  grantAccess:      grantAccessZkir,
-  revokeAccess:     revokeAccessZkir,
-  signDocument:     signDocumentZkir,
+  mintDocument: mintDocumentZkir,
+  grantAccess: grantAccessZkir,
+  revokeAccess: revokeAccessZkir,
+  signDocument: signDocumentZkir,
 };
 const PROVER_URLS: Record<string, string> = {
   createCollection: createCollectionProver,
-  mintDocument:     mintDocumentProver,
-  grantAccess:      grantAccessProver,
-  revokeAccess:     revokeAccessProver,
-  signDocument:     signDocumentProver,
+  mintDocument: mintDocumentProver,
+  grantAccess: grantAccessProver,
+  revokeAccess: revokeAccessProver,
+  signDocument: signDocumentProver,
 };
 const VERIFIER_URLS: Record<string, string> = {
   createCollection: createCollectionVerifier,
-  mintDocument:     mintDocumentVerifier,
-  grantAccess:      grantAccessVerifier,
-  revokeAccess:     revokeAccessVerifier,
-  signDocument:     signDocumentVerifier,
+  mintDocument: mintDocumentVerifier,
+  grantAccess: grantAccessVerifier,
+  revokeAccess: revokeAccessVerifier,
+  signDocument: signDocumentVerifier,
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -103,13 +126,6 @@ function hexToBytes(hex: string): Uint8Array {
   return arr;
 }
 
-/** Computes a SHA-256 hash of a hex-encoded string, returns hex string. */
-async function sha256Hex(input: string): Promise<string> {
-  const bytes = new TextEncoder().encode(input);
-  const hashBuf = await crypto.subtle.digest("SHA-256", bytes);
-  return bytesToHex(new Uint8Array(hashBuf));
-}
-
 // ─── Indexer: fetch current on-chain contract state ──────────────────────────
 
 /**
@@ -141,35 +157,35 @@ async function fetchContractState(indexerUri: string): Promise<ContractState> {
 // ─── Proving: build KeyMaterialProvider from prover server ───────────────────
 
 /**
- * Builds a KeyMaterialProvider backed by the locally bundled ZK artifacts.
+ * Builds a ZKConfigProvider backed by the locally bundled ZK artifacts.
  * Files are imported via Vite ?url and served as hashed static assets.
- * The wallet calls getZKIR/getProverKey/getVerifierKey with the circuit name
- * (e.g. "mintDocument") which maps to the ZKIR_URLS / PROVER_URLS / VERIFIER_URLS tables.
+ * The concrete subclass satisfies httpClientProvingProvider's ZKConfigProvider<K>
+ * parameter — the base class provides get(), getVerifierKeys(), asKeyMaterialProvider().
  */
-function buildKeyMaterialProvider(): KeyMaterialProvider {
+function buildZKConfigProvider(): ZKConfigProvider<string> {
   const fetchBin = async (url: string): Promise<Uint8Array> => {
     const res = await fetch(url);
     if (!res.ok)
       throw new Error(`Failed to fetch key material: ${url} (${res.status})`);
     return new Uint8Array(await res.arrayBuffer());
   };
-  return {
-    getZKIR: (loc) => {
+  return new (class extends ZKConfigProvider<string> {
+    getZKIR(loc: string) {
       const url = ZKIR_URLS[loc];
       if (!url) throw new Error(`No ZKIR for circuit: ${loc}`);
-      return fetchBin(url);
-    },
-    getProverKey: (loc) => {
+      return fetchBin(url).then(createZKIR);
+    }
+    getProverKey(loc: string) {
       const url = PROVER_URLS[loc];
       if (!url) throw new Error(`No prover key for circuit: ${loc}`);
-      return fetchBin(url);
-    },
-    getVerifierKey: (loc) => {
+      return fetchBin(url).then(createProverKey);
+    }
+    getVerifierKey(loc: string) {
       const url = VERIFIER_URLS[loc];
       if (!url) throw new Error(`No verifier key for circuit: ${loc}`);
-      return fetchBin(url);
-    },
-  };
+      return fetchBin(url).then(createVerifierKey);
+    }
+  })();
 }
 
 // ─── Circuit context builder ──────────────────────────────────────────────────
@@ -204,16 +220,22 @@ async function buildCircuitContext(connectedAPI: MidnightConnectedAPI) {
 // ─── Transaction pipeline: prove → balance → submit ─────────────────────────
 
 /**
- * Serializes circuit proof data, proves it with the wallet's proving provider,
- * balances the transaction, submits it, and returns a deterministic txHash.
+ * Proves a circuit, assembles the proof into a proper Midnight transaction,
+ * balances it via the wallet, submits it, and returns a deterministic txHash.
  *
- * The txHash is derived as SHA-256 of the balanced serialized transaction string.
- * This is a deterministic identifier; the actual on-chain transaction hash may
- * differ depending on Midnight's ledger hashing scheme.
+ * Root cause of old bug: httpClientProvingProvider.prove() returns a raw proof
+ * blob (midnight:proof-versioned:...), NOT a transaction.  Passing that blob
+ * directly to balanceUnsealedTransaction() caused a deserialization error because
+ * the wallet expects a Transaction<SignatureEnabled,Proof,PreBinding>.
+ *
+ * Fix: build an UnprovenTransaction from the circuit data, call .prove() on it
+ * (which internally calls the proof server AND embeds the proof into the tx),
+ * then serialize the resulting UnboundTransaction before handing it to Lace.
  */
 async function proveBalanceSubmit(
   connectedAPI: MidnightConnectedAPI,
   proofData: ProofData,
+  gasCost: RunningCost,
   circuitKeyLocation: string,
 ): Promise<string> {
   console.log(
@@ -221,71 +243,174 @@ async function proveBalanceSubmit(
     circuitKeyLocation,
   );
   try {
-    // Serialize the proof data into the preimage format expected by the prover.
-    // Both 1AM and Lace paths start from the same serialized preimage.
-    const serializedPreimage = proofDataIntoSerializedPreimage(
-      proofData.input,
-      proofData.output,
-      proofData.publicTranscript,
-      proofData.privateTranscriptOutputs,
-      circuitKeyLocation,
-    );
-    console.log(
-      "[proveBalanceSubmit] serializedPreimage built, byte length:",
-      serializedPreimage.length,
-    );
+    const config = await connectedAPI.getConfiguration();
+    const proverServerUri = "http://localhost:6300";
+    console.log("[proveBalanceSubmit] proverServerUri:", proverServerUri);
 
-    const keyMaterialProvider = buildKeyMaterialProvider();
-    console.log(
-      "[proveBalanceSubmit] keyMaterialProvider built",
-      keyMaterialProvider,
+    // Build the circuit-level proving provider pointed at the local proof server.
+    // httpClientProvingProvider.prove(preimage, key) → raw proof bytes.
+    // We do NOT call .prove() directly here; instead we let Transaction.prove()
+    // call it internally so it can embed the proof into the transaction structure.
+    const zkConfigProvider = buildZKConfigProvider();
+    const provingProvider = httpClientProvingProvider(
+      proverServerUri,
+      zkConfigProvider,
     );
 
-    // if (typeof (connectedAPI as any).getProvingProvider !== "function") {
-    //   throw new Error(
-    //     "WALLET_NO_PROVING_PROVIDER: This wallet does not support getProvingProvider. " +
-    //       "Update your Lace or 1AM extension, or use simulated minting.",
-    //   );
-    // }
-    const provingProvider =
-      await connectedAPI.getProvingProvider(keyMaterialProvider);
-
-    // ── DEBUG: inspect what the wallet actually returned ──────────────────────
-    console.log("[proveBalanceSubmit] provingProvider raw value:", provingProvider);
-    console.log("[proveBalanceSubmit] provingProvider typeof:", typeof provingProvider);
-    console.log("[proveBalanceSubmit] provingProvider is null?", provingProvider == null);
-    if (provingProvider != null) {
-      console.log("[proveBalanceSubmit] provingProvider constructor:", (provingProvider as any)?.constructor?.name);
-      console.log("[proveBalanceSubmit] provingProvider own keys:", Object.keys(provingProvider as object));
-      console.log("[proveBalanceSubmit] provingProvider prototype keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(provingProvider as object)));
-      console.log("[proveBalanceSubmit] typeof provingProvider.prove:", typeof (provingProvider as any).prove);
-      // Log every enumerable property and its type
-      for (const key of Object.keys(provingProvider as object)) {
-        console.log(`[proveBalanceSubmit]   .${key} =>`, typeof (provingProvider as any)[key], (provingProvider as any)[key]);
-      }
+    // ── Step 1: fetch on-chain contract state and extract the ContractOperation ──
+    // The ContractOperation is needed by ContractCallPrototype to verify the
+    // circuit entry point against the deployed contract state.
+    const compactContractState = await fetchContractState(config.indexerUri);
+    const ledgerContractState = LedgerContractState.deserialize(
+      compactContractState.serialize(),
+    );
+    const operation = ledgerContractState.operation(circuitKeyLocation);
+    if (!operation) {
+      throw new Error(
+        `[proveBalanceSubmit] no operation for circuit: ${circuitKeyLocation}`,
+      );
     }
-    // ─────────────────────────────────────────────────────────────────────────
-
-    const provenBytes = await provingProvider.prove(
-      serializedPreimage,
+    console.log(
+      "[proveBalanceSubmit] ContractOperation retrieved for:",
       circuitKeyLocation,
     );
-    const provenHex = bytesToHex(provenBytes);
+
+    // ── Step 2: build the Transcript ──────────────────────────────────────────
+    // document_vault.compact has no fallible {} blocks → entire publicTranscript
+    // is guaranteed.  It also has no coin operations (no shielded inputs/outputs,
+    // no nullifiers, no cross-contract calls, no token mints) → Effects is empty.
+    const emptyEffects = {
+      claimedNullifiers: [],
+      claimedShieldedReceives: [],
+      claimedShieldedSpends: [],
+      claimedContractCalls: [],
+      shieldedMints: new Map(),
+      unshieldedMints: new Map(),
+      unshieldedInputs: new Map(),
+      unshieldedOutputs: new Map(),
+      claimedUnshieldedSpends: new Map(),
+    };
+    const guaranteedTranscript = {
+      gas: gasCost,
+      effects: emptyEffects,
+      program: proofData.publicTranscript,
+    };
     console.log(
-      "[proveBalanceSubmit] prove() complete, provenHex length:",
-      provenHex.length,
+      "[proveBalanceSubmit] transcript program ops:",
+      guaranteedTranscript.program.length,
     );
 
-    const { tx: balancedTx } =
-      await connectedAPI.balanceUnsealedTransaction(provenHex);
-    console.log("[proveBalanceSubmit] balanceUnsealedTransaction() complete");
+    // ── Step 3: build ContractCallPrototype ───────────────────────────────────
+    const contractCallProto = new ContractCallPrototype(
+      asContractAddress(CONTRACT_ADDRESS),
+      circuitKeyLocation,
+      operation,
+      guaranteedTranscript as any, // Transcript<AlignedValue>
+      undefined, // no fallible transcript
+      proofData.privateTranscriptOutputs as any[],
+      proofData.input as any,
+      proofData.output as any,
+      communicationCommitmentRandomness(),
+      circuitKeyLocation,
+    );
 
-    await connectedAPI.submitTransaction(balancedTx);
+    // ── Step 4: build UnprovenTransaction ────────────────────────────────────
+    // document_vault.compact has no shielded coin operations, so the ZswapOffer
+    // (guaranteed/fallible coin offer) is undefined.
+    setNetworkId(CONTRACT_NETWORK);
+    const intent = Intent.new(ttlOneHour()).addCall(contractCallProto);
+    const unprovenTx = Transaction.fromPartsRandomized(
+      getNetworkId(),
+      undefined, // no guaranteed coin offer
+      undefined, // no fallible coin offer
+      intent as any,
+    );
+    console.log(
+      "[proveBalanceSubmit] UnprovenTransaction built, object type:",
+      Object.prototype.toString.call(unprovenTx),
+    );
+
+    // ── Step 5: prove ─────────────────────────────────────────────────────────
+    // Transaction.prove() calls provingProvider.prove(preimage, key) internally,
+    // gets the raw proof bytes from the local proof server, and embeds them into
+    // the transaction — returning Transaction<SignatureEnabled,Proof,PreBinding>.
+    const costModel = CostModel.initialCostModel();
+    const unboundTx = await unprovenTx.prove(provingProvider, costModel);
+
+    // Transaction.toString() returns Rust Debug format "StandardTransaction { ... }" — NOT wire format.
+    // Wire format lives in serialize(): ASCII header bytes + binary payload bytes.
+    // Encoding: base64(binaryPayload) appended to the ASCII header gives the string
+    // that balanceUnsealedTransaction() expects: midnight:transaction[v9](...):base64data
+    const rawBytes = unboundTx.serialize();
+
+    // Debug: confirm we have the right object and methods
+    const proto = Object.getPrototypeOf(unboundTx);
+    console.log(
+      "[proveBalanceSubmit] unboundTx constructor:",
+      unboundTx?.constructor?.name,
+    );
+    console.log(
+      "[proveBalanceSubmit] methods on proto:",
+      Object.getOwnPropertyNames(proto).filter(
+        (n) => typeof (unboundTx as any)[n] === "function",
+      ),
+    );
+    console.log(
+      "[proveBalanceSubmit] has serialize():",
+      typeof (unboundTx as any).serialize === "function",
+    );
+    console.log(
+      "[proveBalanceSubmit] toString() prefix (40):",
+      unboundTx.toString().slice(0, 40),
+    );
+    console.log(
+      "[proveBalanceSubmit] serialize() byte length:",
+      rawBytes.length,
+    );
+
+    // Serialize as pure hex — the wallet decodes hex → bytes → Transaction.deserialize() internally.
+    // The reference (midnight-agent-did-manager/lib/providers.ts) uses toHex(tx.serialize()).
+    // The previous custom base64 format was not hex, so the wallet decoded it to all-zero bytes
+    // and the ASCII header was empty → "got: ''".
+    const serializedHex = bytesToHex(rawBytes);
+    console.log("[proveBalanceSubmit] serializedHex length:", serializedHex.length);
+    console.log("[proveBalanceSubmit] serializedHex prefix (40):", serializedHex.slice(0, 40));
+
+    // ── Step 6: balance ───────────────────────────────────────────────────────
+    // payFees: true is required — the wallet will add fee coins to cover gas.
+    const balanceResult = await (connectedAPI as any).balanceUnsealedTransaction(
+      serializedHex,
+      { payFees: true },
+    );
+    console.log(
+      "[proveBalanceSubmit] balanceResult type:", typeof balanceResult,
+      "has .tx:", 'tx' in Object(balanceResult),
+    );
+
+    // Wallet returns { tx: hexString }; support direct string return as fallback.
+    const balancedHex: string = typeof balanceResult === 'string'
+      ? balanceResult
+      : (balanceResult as any).tx;
+    console.log("[proveBalanceSubmit] balancedHex length:", balancedHex?.length);
+
+    // ── Step 7: deserialize balanced tx to extract the on-chain identifier ────
+    const balancedTx = Transaction.deserialize(
+      "signature" as any,
+      "proof" as any,
+      "binding" as any,
+      hexToBytes(balancedHex),
+    );
+    console.log(
+      "[proveBalanceSubmit] balancedTx constructor:", balancedTx?.constructor?.name,
+    );
+
+    // ── Step 8: submit ────────────────────────────────────────────────────────
+    await (connectedAPI as any).submitTransaction(bytesToHex(balancedTx.serialize()));
     console.log("[proveBalanceSubmit] submitTransaction() complete");
 
-    const txHash = await sha256Hex(balancedTx);
-    console.log("[proveBalanceSubmit] done, txHash:", txHash);
-    return txHash;
+    const [txId] = (balancedTx as any).identifiers();
+    console.log("[proveBalanceSubmit] done, txId:", String(txId));
+    return String(txId ?? balancedHex.slice(0, 64));
   } catch (err) {
     console.error("[proveBalanceSubmit] ERROR:", err);
     throw err;
@@ -331,13 +456,14 @@ export async function callCreateCollection(
 ): Promise<{ onchainCollectionId: bigint; txId: string }> {
   const contract = new Contract(makeWitnesses());
   const ctx = await buildCircuitContext(connectedAPI);
-  const { result, proofData } = contract.circuits.createCollection(
+  const { result, proofData, gasCost } = contract.circuits.createCollection(
     ctx,
     creatorPk,
   );
   const txId = await proveBalanceSubmit(
     connectedAPI,
     proofData,
+    gasCost,
     CIRCUIT_KEY.createCollection,
   );
   return { onchainCollectionId: result, txId };
@@ -368,7 +494,7 @@ export async function callMintDocument(
   const ctx = await buildCircuitContext(connectedAPI);
   console.log("ctx", ctx);
 
-  const { result, proofData } = contract.circuits.mintDocument(
+  const { result, proofData, gasCost } = contract.circuits.mintDocument(
     ctx,
     params.docHash,
     params.metaHash,
@@ -382,6 +508,7 @@ export async function callMintDocument(
   const txId = await proveBalanceSubmit(
     connectedAPI,
     proofData,
+    gasCost,
     CIRCUIT_KEY.mintDocument,
   );
   console.log("mintDocument txId", txId);
@@ -402,10 +529,15 @@ export async function callGrantAccess(
 ): Promise<{ txId: string }> {
   const contract = new Contract(makeWitnesses());
   const ctx = await buildCircuitContext(connectedAPI);
-  const { proofData } = contract.circuits.grantAccess(ctx, tokenId, viewerPk);
+  const { proofData, gasCost } = contract.circuits.grantAccess(
+    ctx,
+    tokenId,
+    viewerPk,
+  );
   const txId = await proveBalanceSubmit(
     connectedAPI,
     proofData,
+    gasCost,
     CIRCUIT_KEY.grantAccess,
   );
   return { txId };
@@ -425,10 +557,15 @@ export async function callRevokeAccess(
 ): Promise<{ txId: string }> {
   const contract = new Contract(makeWitnesses());
   const ctx = await buildCircuitContext(connectedAPI);
-  const { proofData } = contract.circuits.revokeAccess(ctx, tokenId, viewerPk);
+  const { proofData, gasCost } = contract.circuits.revokeAccess(
+    ctx,
+    tokenId,
+    viewerPk,
+  );
   const txId = await proveBalanceSubmit(
     connectedAPI,
     proofData,
+    gasCost,
     CIRCUIT_KEY.revokeAccess,
   );
   return { txId };
@@ -452,10 +589,15 @@ export async function callSignDocument(
 ): Promise<{ txId: string }> {
   const contract = new Contract(makeWitnesses(sigHash));
   const ctx = await buildCircuitContext(connectedAPI);
-  const { proofData } = contract.circuits.signDocument(ctx, tokenId, viewerPk);
+  const { proofData, gasCost } = contract.circuits.signDocument(
+    ctx,
+    tokenId,
+    viewerPk,
+  );
   const txId = await proveBalanceSubmit(
     connectedAPI,
     proofData,
+    gasCost,
     CIRCUIT_KEY.signDocument,
   );
   return { txId };

@@ -18,7 +18,7 @@ export interface MidnightConnectedAPI {
   getDustAddress(): Promise<{ dustAddress: string }>;
   getShieldedBalances(): Promise<Record<string, bigint>>;
   getProvingProvider(keyMaterialProvider?: import('@midnight-ntwrk/dapp-connector-api').KeyMaterialProvider): Promise<ProvingProvider>;
-  balanceUnsealedTransaction(tx: UnbalancedTransaction): Promise<BalancedTransaction>;
+  balanceUnsealedTransaction(tx: UnbalancedTransaction, options?: { payFees?: boolean }): Promise<{ tx: string }>;
   submitTransaction(tx: BalancedTransaction): Promise<string>; // returns txId
 }
 

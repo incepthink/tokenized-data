@@ -135,6 +135,10 @@ export function useMidnightWallet(): MidnightWalletState {
 
       // Helper that does the actual connect + address fetch.
       // Defined inline so we can call it twice (initial attempt + one retry).
+      console.log("[Midnight/Lace] freshLace object:", freshLace);
+      console.log("[Midnight/Lace] freshLace keys:", Object.keys(freshLace as any));
+      console.log("[Midnight/Lace] calling connect('preprod')...");
+
       const attemptConnect = async () => {
         const laceAPI = await freshLace.connect(NETWORK);
         console.warn(
@@ -151,19 +155,33 @@ export function useMidnightWallet(): MidnightWalletState {
       try {
         result = await attemptConnect();
       } catch (firstErr) {
-        // "channel was shutdown" means the extension's background service worker
-        // was terminated while we were trying to connect. Calling connect() again
-        // sends a new message through the content script, which wakes the worker
-        // back up (or triggers the unlock popup if the wallet is locked).
-        // We retry exactly once — if it fails again we surface the real error.
-        const isShutdown =
-          firstErr instanceof Error &&
-          firstErr.message.toLowerCase().includes("was shutdown");
+        console.error("[Midnight/Lace] connect() threw:", firstErr);
+        console.error(
+          "[Midnight/Lace] error message:",
+          firstErr instanceof Error ? firstErr.message : String(firstErr),
+        );
+        console.error("[Midnight/Lace] error type:", (firstErr as any)?.constructor?.name);
 
-        if (!isShutdown) throw firstErr; // unrelated error — rethrow immediately
+        const msg = firstErr instanceof Error ? firstErr.message.toLowerCase() : "";
 
-        console.warn("[Midnight/Lace] Channel shutdown detected — retrying once…");
-        result = await attemptConnect(); // second attempt on the freshly-woken worker
+        // "channel was shutdown" — MV3 service worker was killed; retry wakes it.
+        const isShutdown = msg.includes("was shutdown");
+        // "not available" / "dapp connector" — extension not yet ready or feature
+        // disabled; a single retry sometimes recovers if it's a timing issue.
+        const isDappConnectorError =
+          msg.includes("not available") ||
+          msg.includes("dapp connector") ||
+          msg.includes("functionality may be disabled");
+
+        if (!isShutdown && !isDappConnectorError) throw firstErr;
+
+        if (isShutdown) {
+          console.warn("[Midnight/Lace] Channel shutdown detected — retrying once…");
+        } else {
+          console.warn("[Midnight/Lace] DApp connector error detected — retrying once…");
+        }
+
+        result = await attemptConnect();
       }
 
       const { laceAPI, unshieldedAddress } = result;

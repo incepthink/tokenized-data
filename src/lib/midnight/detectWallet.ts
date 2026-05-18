@@ -40,10 +40,17 @@ export async function detectMidnightWallet(): Promise<MidnightWalletAPI | null> 
  */
 export function detectLaceWallet(): LaceWalletObject | null {
   const midnight = window.midnight;
+  console.log("[Midnight/Lace] window.midnight:", midnight);
+  console.log("[Midnight/Lace] window.midnight.mnLace:", (midnight as any)?.mnLace);
   if (!midnight) return null;
 
   // Check the documented Lace injection key first
-  if ((midnight as any).mnLace) return (midnight as any).mnLace as LaceWalletObject;
+  if ((midnight as any).mnLace) {
+    const result = (midnight as any).mnLace as LaceWalletObject;
+    console.log("[Midnight/Lace] detectLaceWallet result (mnLace):", result);
+    console.log("[Midnight/Lace] mnLace keys:", Object.keys(result as any));
+    return result;
+  }
 
   // Fallback: scan for rdns or name properties
   const lace = Object.values(midnight).find(
@@ -52,5 +59,7 @@ export function detectLaceWallet(): LaceWalletObject | null {
       entry?.name?.toLowerCase() === "lace"
   );
 
-  return lace ? (lace as unknown as LaceWalletObject) : null;
+  const result = lace ? (lace as unknown as LaceWalletObject) : null;
+  console.log("[Midnight/Lace] detectLaceWallet result (fallback):", result);
+  return result;
 }

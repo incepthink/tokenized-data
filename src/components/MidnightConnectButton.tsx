@@ -1,8 +1,8 @@
 // Midnight Wallet — Connect Button component
 // Supports both Lace (walletType="lace") and 1AM (walletType="oneam", default).
 
-import { useMidnightWalletContext } from '@/context/MidnightWalletContext';
-import { Wallet, LogOut, Loader2 } from 'lucide-react';
+import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
+import { Wallet, LogOut, Loader2 } from "lucide-react";
 
 function truncateAddress(addr: string): string {
   if (addr.length <= 16) return addr;
@@ -10,10 +10,12 @@ function truncateAddress(addr: string): string {
 }
 
 interface MidnightConnectButtonProps {
-  walletType?: 'oneam' | 'lace';
+  walletType?: "oneam" | "lace";
 }
 
-export function MidnightConnectButton({ walletType = 'oneam' }: MidnightConnectButtonProps) {
+export function MidnightConnectButton({
+  walletType = "oneam",
+}: MidnightConnectButtonProps) {
   const {
     isOneamInstalled,
     isLaceInstalled,
@@ -26,12 +28,13 @@ export function MidnightConnectButton({ walletType = 'oneam' }: MidnightConnectB
     disconnect,
     error,
   } = useMidnightWalletContext();
+  console.log(error);
 
-  const isLace = walletType === 'lace';
+  const isLace = walletType === "lace";
   const isInstalled = isLace ? isLaceInstalled : isOneamInstalled;
   const isThisWalletConnected = isConnected && connectedWallet === walletType;
-  const walletLabel = isLace ? 'Lace Wallet' : '1AM Wallet';
-  const installHref = isLace ? 'https://www.lace.io' : 'https://1am.xyz';
+  const walletLabel = isLace ? "Lace Wallet" : "1AM Wallet";
+  const installHref = isLace ? "https://www.lace.io" : "https://1am.xyz";
 
   // Still detecting wallet extension (only relevant for 1AM which polls)
   if (isConnecting && !isConnected && !isLace) {
@@ -67,7 +70,9 @@ export function MidnightConnectButton({ walletType = 'oneam' }: MidnightConnectB
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-card-elevated border border-border text-sm">
           <div className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="font-mono text-foreground">{truncateAddress(address)}</span>
+          <span className="font-mono text-foreground">
+            {truncateAddress(address)}
+          </span>
           <span className="text-xs text-muted-foreground">preprod</span>
         </div>
         <button
@@ -86,7 +91,7 @@ export function MidnightConnectButton({ walletType = 'oneam' }: MidnightConnectB
   const isThisConnecting = isConnecting && !isConnected;
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-center gap-1">
       <button
         onClick={handleConnect}
         disabled={isThisConnecting}
@@ -97,10 +102,14 @@ export function MidnightConnectButton({ walletType = 'oneam' }: MidnightConnectB
         ) : (
           <Wallet size={14} />
         )}
-        {isThisConnecting ? 'Connecting…' : `Connect ${walletLabel}`}
+        {isThisConnecting ? "Connecting…" : `Connect ${walletLabel}`}
       </button>
       {error && connectedWallet === null && (
-        <span className="text-xs text-destructive">{error}</span>
+        <span className="text-xs text-destructive text-center max-w-xs">
+          {/not available|dapp connector|functionality may be disabled/i.test(error)
+            ? "DApp connector is disabled in Lace. Open Lace → Settings → DApp Connector and enable it, then retry."
+            : error}
+        </span>
       )}
     </div>
   );
