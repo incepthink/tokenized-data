@@ -1,11 +1,12 @@
 import axios from "axios";
 
 export const axiosInstance = axios.create({
-  baseURL: "https://test.hashcase.co/api", // https://test.hashcase.co/api
+  baseURL:
+    import.meta.env.VITE_HASHCASE_DATA_API_URL || "https://test.hashcase.co/api",
 });
 
 export const axiosInstanceImage = axios.create({
-  baseURL: "https://api.hashcase.co", // https://test.hashcase.co/api
+  baseURL: import.meta.env.VITE_HASHCASE_API_URL || "https://api.hashcase.co",
 });
 
 axiosInstance.interceptors.request.use((config) => {
