@@ -1,118 +1,105 @@
-pragma language_version 0.22;
+pragma language_version >= 0.28;
 import CompactStandardLibrary;
 
-// ── Composite key struct for (tokenId, viewerPk) hashing ─────────────────────
-struct CompositeKey {
-  a: Uint<128>;
-  b: Bytes<32>;
+// NexVault document vault.
+//
+// Identity: every user holds a 32-byte vault secret key that never leaves the
+// browser. Their public identity ("vault id") is derivePk(secretKey). Circuits
+// prove knowledge of the secret key in zero knowledge; only the public key and
+// the hashes below are ever written to the ledger.
+
+struct AccessKeyInput {
+  tokenId: Uint<64>;
+  viewer: Bytes<32>;
 }
 
-// ── Witnesses (private state — implemented in TypeScript, never transmitted) ──
-witness ownerSecretKey(): Bytes<32>;
-witness viewerSecretKey(): Bytes<32>;
-witness viewerSignatureHash(): Bytes<32>;
+// Private input, supplied by the caller's browser and never transmitted.
+witness secretKey(): Bytes<32>;
 
-// ── Public Ledger State ───────────────────────────────────────────────────────
+// ── Public ledger state ──────────────────────────────────────────────────────
 export ledger tokenCounter:      Counter;
 export ledger collectionCounter: Counter;
 
-// Document fields (keyed by tokenId)
-export ledger docHash:       Map<Uint<128>, Bytes<32>>;  // IPFS CID hash of document file
-export ledger metadataHash:  Map<Uint<128>, Bytes<32>>;  // hash of off-chain metadata
-export ledger ownerPk:       Map<Uint<128>, Bytes<32>>;  // owner's ZK-derived public key
-export ledger creatorPk:     Map<Uint<128>, Bytes<32>>;  // creator's public key
-export ledger docCollection: Map<Uint<128>, Uint<128>>;  // collectionId this doc belongs to
+// Documents, keyed by tokenId
+export ledger docHash:       Map<Uint<64>, Bytes<32>>;  // sha256 of the file
+export ledger metadataHash:  Map<Uint<64>, Bytes<32>>;  // sha256 of title|category|description
+export ledger ownerPk:       Map<Uint<64>, Bytes<32>>;  // owner's vault id
+export ledger creatorPk:     Map<Uint<64>, Bytes<32>>;  // creator's vault id
+export ledger docCollection: Map<Uint<64>, Uint<64>>;   // collection the document belongs to
 
-// Collection ownership (keyed by collectionId)
-export ledger collectionOwner: Map<Uint<128>, Bytes<32>>;
+// Collections, keyed by collectionId
+export ledger collectionOwner: Map<Uint<64>, Bytes<32>>;
 
-// Access control — keyed by persistentHash(tokenId, viewerPk)
+// Access control, keyed by accessKey(tokenId, viewerPk)
 export ledger accessGrants: Map<Bytes<32>, Boolean>;    // true = access granted
-export ledger accessLogs:   Map<Bytes<32>, Bytes<32>>;  // viewer's signature hash
+export ledger accessLogs:   Map<Bytes<32>, Bytes<32>>;  // viewer's latest signature hash
 
-// ── Pure helpers ──────────────────────────────────────────────────────────────
-
-// Derive a public key from a secret key
-pure circuit derivePk(sk: Bytes<32>): Bytes<32> {
-  return persistentHash<Bytes<32>>(sk);
+// ── Pure helpers (also callable off-chain from TypeScript) ───────────────────
+export pure circuit derivePk(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "nexvault:pk:v1"), sk]);
 }
 
-// Build a Bytes<32> composite key from tokenId + viewerPk
-pure circuit accessKey(tokenId: Uint<128>, viewerPk: Bytes<32>): Bytes<32> {
-  return persistentHash<CompositeKey>(CompositeKey { a: tokenId, b: viewerPk });
+export pure circuit accessKey(tokenId: Uint<64>, viewerPk: Bytes<32>): Bytes<32> {
+  return persistentHash<AccessKeyInput>(AccessKeyInput { tokenId: tokenId, viewer: viewerPk });
 }
 
-// ── Circuit 1: createCollection ───────────────────────────────────────────────
-// Role: Creator
-// Creates a new collection owned by the given creator public key.
-export circuit createCollection(creatorPubKey: Bytes<32>): Uint<128> {
-  const colId: Uint<128> = collectionCounter as Uint<128>;
+// ── createCollection (creator) ───────────────────────────────────────────────
+export circuit createCollection(): Uint<64> {
+  const pk = disclose(derivePk(secretKey()));
+  const colId = collectionCounter.read();
   collectionCounter.increment(1);
-  collectionOwner.insert(colId, disclose(creatorPubKey));
+  collectionOwner.insert(colId, pk);
   return colId;
 }
 
-// ── Circuit 2: mintDocument ───────────────────────────────────────────────────
-// Role: Creator
-// Mints a document NFT into a collection. Stores all metadata on the public ledger.
+// ── mintDocument (creator) ───────────────────────────────────────────────────
+// Only the creator of the collection can mint into it.
 export circuit mintDocument(
-  inputDocHash:      Bytes<32>,   // sha256 of the document file bytes (IPFS CID)
-  inputMetaHash:     Bytes<32>,   // hash of { title, category, description }
-  inputOwnerPk:      Bytes<32>,   // wallet owner's ZK public key
-  inputCreatorPk:    Bytes<32>,   // creator's public key
-  inputCollectionId: Uint<128>    // collection this document belongs to
-): Uint<128> {
-  const tokenId: Uint<128> = tokenCounter as Uint<128>;
+  inputDocHash:      Bytes<32>,
+  inputMetaHash:     Bytes<32>,
+  inputOwnerPk:      Bytes<32>,
+  inputCollectionId: Uint<64>
+): Uint<64> {
+  const pk = disclose(derivePk(secretKey()));
+  const colId = disclose(inputCollectionId);
+  assert(collectionOwner.member(colId), "Collection does not exist");
+  assert(collectionOwner.lookup(colId) == pk, "Not the collection creator");
+  const tokenId = tokenCounter.read();
   tokenCounter.increment(1);
-  docHash.insert(tokenId,       disclose(inputDocHash));
-  metadataHash.insert(tokenId,  disclose(inputMetaHash));
-  ownerPk.insert(tokenId,       disclose(inputOwnerPk));
-  creatorPk.insert(tokenId,     disclose(inputCreatorPk));
-  docCollection.insert(tokenId, disclose(inputCollectionId));
+  docHash.insert(tokenId, disclose(inputDocHash));
+  metadataHash.insert(tokenId, disclose(inputMetaHash));
+  ownerPk.insert(tokenId, disclose(inputOwnerPk));
+  creatorPk.insert(tokenId, pk);
+  docCollection.insert(tokenId, colId);
   return tokenId;
 }
 
-// ── Circuit 3: grantAccess ────────────────────────────────────────────────────
-// Role: Owner
-// ZK proof: ownerSecretKey() witness derives a public key that must match
-// ownerPk[tokenId]. Secret key never leaves the device.
-export circuit grantAccess(tokenId: Uint<128>, viewerPubKey: Bytes<32>): [] {
-  const sk: Bytes<32>         = ownerSecretKey();
-  const pk: Bytes<32>         = derivePk(sk);
-  // Disclose circuit params before any ledger operation
-  const pubTokenId: Uint<128> = disclose(tokenId);
-  const pubViewer: Bytes<32>  = disclose(viewerPubKey);
-  assert(pk == ownerPk.lookup(pubTokenId), "Not the document owner");
-  const key: Bytes<32>        = accessKey(pubTokenId, pubViewer);
-  accessGrants.insert(key, disclose(true));
+// ── grantAccess (owner) ──────────────────────────────────────────────────────
+export circuit grantAccess(tokenId: Uint<64>, viewerPubKey: Bytes<32>): [] {
+  const pk = disclose(derivePk(secretKey()));
+  const id = disclose(tokenId);
+  assert(ownerPk.member(id), "Document does not exist");
+  assert(ownerPk.lookup(id) == pk, "Not the document owner");
+  accessGrants.insert(accessKey(id, disclose(viewerPubKey)), true);
 }
 
-// ── Circuit 4: revokeAccess ───────────────────────────────────────────────────
-// Role: Owner
-// Same ZK identity proof as grantAccess. Removes a viewer's permission.
-export circuit revokeAccess(tokenId: Uint<128>, viewerPubKey: Bytes<32>): [] {
-  const sk: Bytes<32>         = ownerSecretKey();
-  const pk: Bytes<32>         = derivePk(sk);
-  const pubTokenId: Uint<128> = disclose(tokenId);
-  const pubViewer: Bytes<32>  = disclose(viewerPubKey);
-  assert(pk == ownerPk.lookup(pubTokenId), "Not the document owner");
-  const key: Bytes<32>        = accessKey(pubTokenId, pubViewer);
-  accessGrants.insert(key, disclose(false));
+// ── revokeAccess (owner) ─────────────────────────────────────────────────────
+export circuit revokeAccess(tokenId: Uint<64>, viewerPubKey: Bytes<32>): [] {
+  const pk = disclose(derivePk(secretKey()));
+  const id = disclose(tokenId);
+  assert(ownerPk.member(id), "Document does not exist");
+  assert(ownerPk.lookup(id) == pk, "Not the document owner");
+  accessGrants.insert(accessKey(id, disclose(viewerPubKey)), false);
 }
 
-// ── Circuit 5: signDocument ───────────────────────────────────────────────────
-// Role: Viewer
-// Viewer proves they hold the private key for a granted viewerPk, then writes
-// an immutable signature hash to the on-chain access log.
-export circuit signDocument(tokenId: Uint<128>, viewerPubKey: Bytes<32>): [] {
-  const sk: Bytes<32>         = viewerSecretKey();
-  const pk: Bytes<32>         = derivePk(sk);
-  assert(pk == viewerPubKey, "Caller is not the claimed viewer");
-  // Disclose circuit params before ledger operations
-  const pubTokenId: Uint<128> = disclose(tokenId);
-  const pubViewer: Bytes<32>  = disclose(viewerPubKey);
-  const key: Bytes<32>        = accessKey(pubTokenId, pubViewer);
-  assert(accessGrants.lookup(key) == true, "Viewer does not have access");
-  const sigHash: Bytes<32>    = viewerSignatureHash();
+// ── signDocument (viewer) ────────────────────────────────────────────────────
+// The viewer proves they hold the key that was granted access, then records a
+// signature hash in the on-chain access log.
+export circuit signDocument(tokenId: Uint<64>, sigHash: Bytes<32>): [] {
+  const pk = disclose(derivePk(secretKey()));
+  const id = disclose(tokenId);
+  const key = accessKey(id, pk);
+  assert(accessGrants.member(key), "Viewer does not have access");
+  assert(accessGrants.lookup(key), "Viewer access was revoked");
   accessLogs.insert(key, disclose(sigHash));
 }
