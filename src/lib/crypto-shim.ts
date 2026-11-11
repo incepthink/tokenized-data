@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-// @ts-expect-error crypto-browserify has no type declarations
+// @ts-ignore crypto-browserify has no type declarations
 import cryptoBrowserify from 'crypto-browserify';
 
 function timingSafeEqual(a: Buffer | Uint8Array, b: Buffer | Uint8Array): boolean {
