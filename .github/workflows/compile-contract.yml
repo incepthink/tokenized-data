@@ -1,0 +1,47 @@
+name: Compile Compact contract
+
+# Compiles contracts/document_vault.compact with the pinned Compact toolchain and
+# commits the generated artifacts (contract JS, ZK keys, ZKIR) back to the branch.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "contracts/document_vault.compact"
+      - ".github/workflows/compile-contract.yml"
+
+permissions:
+  contents: write
+
+env:
+  COMPACTC_VERSION: "0.36.0"
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download compactc
+        run: |
+          curl -sSfLO "https://github.com/midnightntwrk/compact/releases/download/compactc-v${COMPACTC_VERSION}/compactc_v${COMPACTC_VERSION}_x86_64-unknown-linux-musl.zip"
+          mkdir -p "$RUNNER_TEMP/compactc"
+          unzip -q "compactc_v${COMPACTC_VERSION}_x86_64-unknown-linux-musl.zip" -d "$RUNNER_TEMP/compactc"
+          rm "compactc_v${COMPACTC_VERSION}_x86_64-unknown-linux-musl.zip"
+          "$RUNNER_TEMP/compactc/compactc" --version
+      - name: Compile
+        run: |
+          rm -rf public/contract/document_vault
+          mkdir -p public/contract
+          "$RUNNER_TEMP/compactc/compactc" contracts/document_vault.compact public/contract/document_vault
+          rm -rf src/lib/managed
+          mkdir -p src/lib/managed
+          cp -r public/contract/document_vault/contract src/lib/managed/contract
+          find public/contract/document_vault -name '*.zkir' -delete
+          ls -R public/contract/document_vault | head -40
+      - name: Commit artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A public/contract src/lib/managed
+          git diff --cached --quiet && echo "no changes" && exit 0
+          git commit -m "build: compiled document_vault artifacts (compactc ${COMPACTC_VERSION})"
+          git push
