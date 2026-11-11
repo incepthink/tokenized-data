@@ -55,15 +55,55 @@ say('network', config.networkId, 'indexer', config.indexer.replace(/project_id=[
 
 const wallet = await MidnightWalletProvider.build(logger, config, seed);
 say('fund this address with tNIGHT if empty:', wallet.unshieldedKeystore.getBech32Address().asString());
-await wallet.start(true);
-const state = await new Promise((resolve) => {
-  const sub = wallet.wallet.state().subscribe((s) => { if (s.isSynced) { sub.unsubscribe(); resolve(s); } });
+await wallet.start(false);
+
+// testkit's own sync gives up after 90 quiet seconds, which is too short for the
+// dust wallet on a public network, so sync and DUST registration are done here.
+const big = (_, v) => (typeof v === 'bigint' ? v.toString() : v);
+const done = (s) => ({
+  shielded: s.shielded.progress.isStrictlyComplete(),
+  unshielded: s.unshielded.progress.isStrictlyComplete(),
+  dust: s.dust.progress.isStrictlyComplete(),
 });
-const night = Object.values(state.unshielded.balances).reduce((a, b) => a + b, 0n);
-const dust = state.dust.balance(new Date());
-say('NIGHT', night.toString(), 'DUST', dust.toString());
+let latest;
+const sub = wallet.wallet.state().subscribe({ next: (s) => { latest = s; }, error: (e) => say('wallet state error', e?.message ?? e) });
+const waitFor = async (label, pred, ms) => {
+  const until = Date.now() + ms;
+  let n = 0;
+  while (Date.now() < until) {
+    if (latest && pred(latest)) return true;
+    if (n++ % 6 === 0 && latest) say(`waiting for ${label}:`, JSON.stringify(done(latest)), 'dust progress', JSON.stringify(latest.dust.progress, big));
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  return false;
+};
+const nightOf = (s) => Object.values(s.unshielded.balances).reduce((x, y) => x + y, 0n);
+
+await waitFor('shielded+unshielded sync', (s) => done(s).shielded && done(s).unshielded, 10 * 60_000);
+await waitFor('funds', (s) => nightOf(s) > 0n, 60_000);
+const night = nightOf(latest);
+say('NIGHT', night.toString());
 if (night === 0n) { say('NO FUNDS: use the faucet for the address above, then run again.'); await wallet.stop(); process.exit(2); }
-if (dust === 0n) { say('NO DUST YET: registration was submitted; wait a few minutes and run again.'); await wallet.stop(); process.exit(3); }
+
+await waitFor('dust sync', (s) => done(s).dust, 6 * 60_000);
+if (latest.dust.balance(new Date()) === 0n) {
+  const unregistered = latest.unshielded.availableCoins.filter((c) => c.meta.registeredForDustGeneration === false);
+  say('DUST is 0; unregistered NIGHT UTXOs:', unregistered.length);
+  if (unregistered.length > 0) {
+    const recipe = await wallet.wallet.registerNightUtxosForDustGeneration(
+      unregistered,
+      wallet.unshieldedKeystore.getPublicKey(),
+      (payload) => wallet.unshieldedKeystore.signDataAsync(payload),
+    );
+    const txId = await wallet.wallet.submitTransaction(await wallet.wallet.finalizeRecipe(recipe));
+    say('DUST registration submitted:', txId);
+  }
+  await waitFor('DUST to generate', (s) => s.dust.balance(new Date()) > 0n, 15 * 60_000);
+}
+const dust = latest.dust.balance(new Date());
+say('DUST', dust.toString());
+if (dust === 0n) { say('NO DUST YET: registration is in; wait and run again.'); await wallet.stop(); process.exit(3); }
+sub.unsubscribe();
 
 const providers = initializeMidnightProviders(wallet, config, {
   privateStateStoreName: 'nexvault-e2e',
