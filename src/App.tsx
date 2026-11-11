@@ -13,6 +13,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import NotFound from "@/pages/NotFound";
+import AdminDeploy from "@/pages/AdminDeploy";
 import CreatorDashboard from "@/pages/creator/CreatorDashboard";
 import CreatorCollections from "@/pages/creator/CreatorCollections";
 import CreatorMint from "@/pages/creator/CreatorMint";
@@ -42,6 +43,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/auth/:persona" element={<AuthPage />} />
+              <Route path="/admin/deploy" element={<AdminDeploy />} />
 
               <Route element={<ProtectedRoute requiredPersona="creator" />}>
                 <Route

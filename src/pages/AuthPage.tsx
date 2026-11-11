@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 export default function AuthPage() {
   const { persona } = useParams<{ persona: string }>();
-  const { isConnected, address } = useMidnightWalletContext();
+  const { isConnected } = useMidnightWalletContext();
   const { login, signup } = useAuth();
   const navigate = useNavigate();
 
@@ -72,7 +72,7 @@ export default function AuthPage() {
       return;
     setLoading(true);
     try {
-      await signup(validPersona, signupName, signupEmail, signupPassword, address ?? undefined);
+      await signup(validPersona, signupName, signupEmail, signupPassword);
       toast.success(`Account created!`);
       navigate(`/${validPersona}/dashboard`);
     } catch (err: unknown) {

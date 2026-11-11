@@ -1,7 +1,20 @@
 {
   "rewrites": [
-    { "source": "/examples/tokenized-data/assets/:path*", "destination": "/assets/:path*" },
-    { "source": "/examples/tokenized-data/:path*", "destination": "/index.html" },
-    { "source": "/examples/tokenized-data", "destination": "/index.html" }
+    {
+      "source": "/examples/tokenized-data/contract/:path*",
+      "destination": "/contract/:path*"
+    },
+    {
+      "source": "/examples/tokenized-data/assets/:path*",
+      "destination": "/assets/:path*"
+    },
+    {
+      "source": "/examples/tokenized-data/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/examples/tokenized-data",
+      "destination": "/index.html"
+    }
   ]
 }

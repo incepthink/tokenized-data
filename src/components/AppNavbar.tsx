@@ -3,7 +3,8 @@ import { useAuth } from "@/context/AuthContext";
 import { NexVaultLogo } from "@/components/NexVaultLogo";
 // import { ConnectButton } from "@rainbow-me/rainbowkit"; // Replaced by 1AM Midnight Wallet
 import { MidnightConnectButton } from "@/components/MidnightConnectButton";
-import { LogOut, Menu, X, User } from "lucide-react";
+import { LogOut, Menu, X, User, Copy, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { useState } from "react";
 import {
   DropdownMenu,
@@ -27,7 +28,7 @@ const NAV_LINKS = {
 };
 
 export function AppNavbar() {
-  const { persona, user, logout } = useAuth();
+  const { persona, user, logout, vaultId, isLegacyAccount } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -66,7 +67,30 @@ export function AppNavbar() {
 
           <div className="flex items-center gap-3">
             {/* <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" /> */}
+            <MidnightConnectButton walletType="oneam" />
             <MidnightConnectButton walletType="lace" />
+            {vaultId && !isLegacyAccount && (
+              <button
+                type="button"
+                title="Your NexVault ID: share it so creators and owners can send you documents. Click to copy."
+                onClick={() => {
+                  void navigator.clipboard.writeText(vaultId);
+                  toast.success("NexVault ID copied");
+                }}
+                className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-card-elevated border border-border text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ID {vaultId.slice(0, 8)}…{vaultId.slice(-4)}
+                <Copy size={12} />
+              </button>
+            )}
+            {isLegacyAccount && (
+              <span
+                title="This account was created before NexVault moved on-chain and has no Midnight identity. Create a new account to mint, share or sign."
+                className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg border border-destructive/40 text-xs text-destructive"
+              >
+                <AlertTriangle size={12} /> Legacy account
+              </span>
+            )}
 
             {user && (
               <DropdownMenu>

@@ -5,7 +5,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useViewerDocuments } from "@/hooks/useViewers";
 import { useSignDocument } from "@/hooks/useSharing";
 import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
-import { callSignDocument, decodeShieldedAddress, bytesToHex } from "@/lib/midnight/contractApi";
+import { callSignDocument, describeVaultError } from "@/lib/midnight/vault";
+import { bytesToHex, isVaultId, sha256 } from "@/lib/midnight/identity";
+import { toast } from "sonner";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
 import { CategoryBadge, StatusBadge } from "@/components/Badges";
 import { WalletAddress } from "@/components/WalletAddress";
@@ -32,7 +34,8 @@ export default function ViewerDocumentDetail() {
   const [sigHash, setSigHash] = useState("");
   const [sigTimestamp] = useState(new Date().toISOString());
 
-  const { connectedAPI, address: midnightAddress } = useMidnightWalletContext();
+  const { connectedAPI } = useMidnightWalletContext();
+  const { vaultId } = useAuth();
 
   const share = shares?.find((s) => s.document.id === id || s.documentId === id);
   const doc = share?.document;
@@ -41,29 +44,31 @@ export default function ViewerDocumentDetail() {
   if (!doc || !share)
     return <p className="text-muted-foreground">Document not found.</p>;
 
+  // The document only unlocks after Midnight accepts the signDocument
+  // transaction: the circuit proves this viewer holds the key that was granted
+  // access, and writes the signature hash to the on-chain access log.
   const handleSign = async () => {
     setSigning(true);
     try {
-      const viewerPk = decodeShieldedAddress(midnightAddress!);
+      if (!connectedAPI) throw new Error("Connect your Midnight wallet first.");
+      if (!doc.onchainTokenId) throw new Error("This document was never minted on Midnight.");
+      if (!vaultId || !isVaultId(vaultId)) throw new Error("Your vault key is not loaded. Log out and log in again.");
+
       const timestamp = new Date().toISOString();
-      const combined = new TextEncoder().encode(
-        bytesToHex(viewerPk) + timestamp + doc.id
-      );
-      const hashBuf = await crypto.subtle.digest("SHA-256", combined);
-      const sigHash = new Uint8Array(hashBuf);
+      const sigHash = await sha256(new TextEncoder().encode(`${vaultId}|${timestamp}|${doc.id}`));
       const sigHashHex = "0x" + bytesToHex(sigHash);
 
-      const tokenId = BigInt(doc.onchainTokenId ?? "0");
-      await callSignDocument(connectedAPI!, tokenId, viewerPk, sigHash);
+      await callSignDocument(connectedAPI, BigInt(doc.onchainTokenId), sigHash);
 
       await signDocument.mutateAsync({ documentId: doc.id, signatureHash: sigHashHex });
       setSigHash(sigHashHex);
       setSigning(false);
       setShowSuccess(true);
       setTimeout(() => { setShowSuccess(false); setSigned(true); }, 1200);
-    } catch {
+    } catch (err) {
+      console.error("[NexVault] signDocument failed:", err);
+      toast.error(describeVaultError(err));
       setSigning(false);
-      setSigned(true);
     }
   };
 
@@ -154,7 +159,7 @@ export default function ViewerDocumentDetail() {
             {signing ? (
               <>
                 <Loader2 size={18} className="mr-2 animate-spin" />
-                Waiting for wallet signature...
+                Proving and signing on Midnight...
               </>
             ) : (
               "Sign & View Document"

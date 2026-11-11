@@ -35,7 +35,6 @@ jobs:
           rm -rf src/lib/managed
           mkdir -p src/lib/managed
           cp -r public/contract/document_vault/contract src/lib/managed/contract
-          find public/contract/document_vault -name '*.zkir' -delete
           ls -R public/contract/document_vault | head -40
       - name: Commit artifacts
         run: |

@@ -13,8 +13,10 @@ import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
 import {
   callGrantAccess,
   callRevokeAccess,
-  decodeShieldedAddress,
-} from "@/lib/midnight/contractApi";
+  describeVaultError,
+} from "@/lib/midnight/vault";
+import { pkFromVaultId } from "@/lib/midnight/identity";
+import { MIDNIGHT_NETWORK, explorerTxUrl } from "@/lib/midnight/config";
 import { CardSkeleton } from "@/components/SkeletonShimmer";
 import { CategoryBadge, NftBadge } from "@/components/Badges";
 import { FilePreview } from "@/components/FilePreview";
@@ -50,6 +52,7 @@ export default function OwnerDocumentDetail() {
   const { id } = useParams<{ id: string }>();
   const [selectedViewer, setSelectedViewer] = useState("");
   const [nftOpen, setNftOpen] = useState(false);
+  const [chainBusy, setChainBusy] = useState<string | null>(null);
 
   const { data: doc, isLoading } = useDocument(id!);
   const { data: viewerList } = useViewerList();
@@ -75,42 +78,47 @@ export default function OwnerDocumentDetail() {
     return <p className="text-muted-foreground">Document not found.</p>;
   }
 
+  // Access is changed on Midnight first; the backend only mirrors what the
+  // chain accepted, so the list below never shows a grant that is not on-chain.
+  const onchainArgs = (viewerWallet: string | null | undefined) => {
+    if (!connectedAPI) throw new Error("Connect your Midnight wallet first.");
+    if (!doc.onchainTokenId) throw new Error("This document was never minted on Midnight.");
+    if (!viewerWallet) throw new Error("This viewer has no NexVault ID.");
+    return { tokenId: BigInt(doc.onchainTokenId), viewerPk: pkFromVaultId(viewerWallet) };
+  };
+
   const handleGrant = async () => {
-    if (!selectedViewer) return;
+    if (!selectedViewer || chainBusy) return;
     const viewer = viewerList?.find((v) => v.id === selectedViewer);
+    setChainBusy("Granting access on Midnight…");
     try {
-      if (connectedAPI && doc.onchainTokenId && viewer?.wallet) {
-        const tokenId = BigInt(doc.onchainTokenId);
-        const viewerPk = decodeShieldedAddress(viewer.wallet);
-        const { txId } = await callGrantAccess(connectedAPI, tokenId, viewerPk);
-        await grantAccess.mutateAsync({ documentId: id!, viewerId: selectedViewer });
-        setSelectedViewer("");
-        toast.success(`Access granted to ${viewer.name} · tx ${txId.slice(0, 10)}…`);
-      } else {
-        await grantAccess.mutateAsync({ documentId: id!, viewerId: selectedViewer });
-        setSelectedViewer("");
-        toast.success(`Access granted to ${viewer?.name ?? "viewer"}`);
-      }
-    } catch {
-      toast.error("Failed to grant access");
+      const { tokenId, viewerPk } = onchainArgs(viewer?.wallet);
+      const { txHash } = await callGrantAccess(connectedAPI!, tokenId, viewerPk);
+      await grantAccess.mutateAsync({ documentId: id!, viewerId: selectedViewer });
+      setSelectedViewer("");
+      toast.success(`Access granted to ${viewer?.name ?? "viewer"} · tx ${txHash.slice(0, 10)}…`);
+    } catch (err) {
+      console.error("[NexVault] grantAccess failed:", err);
+      toast.error(describeVaultError(err));
+    } finally {
+      setChainBusy(null);
     }
   };
 
   const handleRevoke = async (viewerId: string, viewerName: string) => {
+    if (chainBusy) return;
     const viewerWallet = sharedWith?.find((s) => s.viewerId === viewerId)?.viewer.wallet;
+    setChainBusy("Revoking access on Midnight…");
     try {
-      if (connectedAPI && doc.onchainTokenId && viewerWallet) {
-        const tokenId = BigInt(doc.onchainTokenId);
-        const viewerPk = decodeShieldedAddress(viewerWallet);
-        const { txId } = await callRevokeAccess(connectedAPI, tokenId, viewerPk);
-        await revokeAccess.mutateAsync({ documentId: id!, viewerId });
-        toast.success(`Access revoked for ${viewerName} · tx ${txId.slice(0, 10)}…`);
-      } else {
-        await revokeAccess.mutateAsync({ documentId: id!, viewerId });
-        toast.success(`Access revoked for ${viewerName}`);
-      }
-    } catch {
-      toast.error("Failed to revoke access");
+      const { tokenId, viewerPk } = onchainArgs(viewerWallet);
+      const { txHash } = await callRevokeAccess(connectedAPI!, tokenId, viewerPk);
+      await revokeAccess.mutateAsync({ documentId: id!, viewerId });
+      toast.success(`Access revoked for ${viewerName} · tx ${txHash.slice(0, 10)}…`);
+    } catch (err) {
+      console.error("[NexVault] revokeAccess failed:", err);
+      toast.error(describeVaultError(err));
+    } finally {
+      setChainBusy(null);
     }
   };
 
@@ -134,6 +142,12 @@ export default function OwnerDocumentDetail() {
           <span className="font-medium text-foreground">Grant access to Viewers, then track every sign-in on-chain.</span>
         </div>
       </div>
+
+      {chainBusy && (
+        <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 mb-6 text-sm text-foreground">
+          {chainBusy} Approve the transaction in your wallet; proving can take a minute.
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-5 gap-8">
         {/* Left - Document detail (3 cols) */}
@@ -163,7 +177,7 @@ export default function OwnerDocumentDetail() {
           </p>
           <p className="text-xs text-muted-foreground">
             By {doc.creator?.name ?? "Unknown"} ·{" "}
-            {new Date(doc.createdAt).toLocaleDateString()} · Midnight Preprod
+            {new Date(doc.createdAt).toLocaleDateString()} · Midnight {MIDNIGHT_NETWORK}
           </p>
 
           <Collapsible
@@ -181,30 +195,30 @@ export default function OwnerDocumentDetail() {
             <CollapsibleContent className="mt-3 bg-card-elevated border border-border rounded-2xl p-4 space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Token ID</span>
-                <span className="text-foreground font-mono">{doc.tokenId}</span>
+                <span className="text-foreground font-mono">{doc.onchainTokenId ?? "not on-chain"}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm gap-4">
                 <span className="text-muted-foreground">Contract</span>
-                <a
-                  href={`https://midnight-explorer.preprod.midnight.network/contracts/${doc.contractAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline font-mono flex items-center gap-1"
-                >
-                  {truncateAddress(doc.contractAddress ?? "")}{" "}
-                  <ExternalLink size={12} />
-                </a>
+                <span className="text-foreground font-mono" title={doc.contractAddress ?? ""}>
+                  {truncateAddress(doc.contractAddress ?? "")}
+                </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm gap-4">
                 <span className="text-muted-foreground">Tx Hash</span>
-                <a
-                  href={`https://midnight-explorer.preprod.midnight.network/transactions/${doc.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline font-mono flex items-center gap-1"
-                >
-                  {truncateAddress(doc.txHash ?? "")} <ExternalLink size={12} />
-                </a>
+                {explorerTxUrl(doc.txHash) ? (
+                  <a
+                    href={explorerTxUrl(doc.txHash)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline font-mono flex items-center gap-1"
+                  >
+                    {truncateAddress(doc.txHash ?? "")} <ExternalLink size={12} />
+                  </a>
+                ) : (
+                  <span className="text-foreground font-mono" title={doc.txHash ?? ""}>
+                    {truncateAddress(doc.txHash ?? "")}
+                  </span>
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>
@@ -249,7 +263,7 @@ export default function OwnerDocumentDetail() {
               </Select>
               <Button
                 onClick={handleGrant}
-                disabled={!selectedViewer || grantAccess.isPending}
+                disabled={!selectedViewer || grantAccess.isPending || !!chainBusy}
                 className="gradient-primary text-primary-foreground rounded-xl glow-primary"
               >
                 Grant

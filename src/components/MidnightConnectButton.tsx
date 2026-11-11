@@ -17,6 +17,8 @@ export function MidnightConnectButton({
   walletType = "oneam",
 }: MidnightConnectButtonProps) {
   const {
+    isDetecting,
+    network,
     isOneamInstalled,
     isLaceInstalled,
     isConnected,
@@ -28,7 +30,6 @@ export function MidnightConnectButton({
     disconnect,
     error,
   } = useMidnightWalletContext();
-  console.log(error);
 
   const isLace = walletType === "lace";
   const isInstalled = isLace ? isLaceInstalled : isOneamInstalled;
@@ -36,8 +37,8 @@ export function MidnightConnectButton({
   const walletLabel = isLace ? "Lace Wallet" : "1AM Wallet";
   const installHref = isLace ? "https://www.lace.io" : "https://1am.xyz";
 
-  // Still detecting wallet extension (only relevant for 1AM which polls)
-  if (isConnecting && !isConnected && !isLace) {
+  // Still detecting wallet extensions (they can inject after page load)
+  if (isDetecting && !isInstalled && !isConnected) {
     return (
       <button
         disabled
@@ -73,7 +74,7 @@ export function MidnightConnectButton({
           <span className="font-mono text-foreground">
             {truncateAddress(address)}
           </span>
-          <span className="text-xs text-muted-foreground">preprod</span>
+          <span className="text-xs text-muted-foreground">{network ?? ""}</span>
         </div>
         <button
           onClick={disconnect}
@@ -89,6 +90,7 @@ export function MidnightConnectButton({
   // Not connected — show connect button
   const handleConnect = isLace ? connectLace : connect;
   const isThisConnecting = isConnecting && !isConnected;
+  if (isConnected && !isThisWalletConnected) return null;
 
   return (
     <div className="flex flex-col items-center gap-1">

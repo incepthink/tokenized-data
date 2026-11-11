@@ -7,9 +7,10 @@ import { useMidnightWalletContext } from "@/context/MidnightWalletContext";
 import {
   callCreateCollection,
   callMintDocument,
-  decodeShieldedAddress,
-  CONTRACT_ADDRESS,
-} from "@/lib/midnight/contractApi";
+  describeVaultError,
+} from "@/lib/midnight/vault";
+import { isVaultId, pkFromVaultId, sha256 } from "@/lib/midnight/identity";
+import { CONTRACT_ADDRESS, MIDNIGHT_NETWORK, explorerTxUrl } from "@/lib/midnight/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,15 +70,14 @@ function deriveFileType(file: File): FileType {
   return "docx";
 }
 
-const isValidMidnightAddress = (addr: string) =>
-  addr.trim().length >= 60 && !addr.startsWith("0x");
+const isValidMidnightAddress = (addr: string) => isVaultId(addr);
 
 export default function CreatorMint() {
   const { data: collections } = useCollections();
   const createCollection = useCreateCollection();
   const createDocument = useCreateDocument();
   const mintDocument = useMintDocument();
-  const { connectedAPI, address } = useMidnightWalletContext();
+  const { connectedAPI } = useMidnightWalletContext();
 
   const [collectionId, setCollectionId] = useState("");
   const [title, setTitle] = useState("");
@@ -92,6 +92,7 @@ export default function CreatorMint() {
   const [mintedTxHash, setMintedTxHash] = useState<string | null>(null);
   const [newColName, setNewColName] = useState("");
   const [newColOpen, setNewColOpen] = useState(false);
+  const [creatingCollection, setCreatingCollection] = useState(false);
   const [ownerEmails, setOwnerEmails] = useState<string[]>([]);
   const [ownerEmailsLoading, setOwnerEmailsLoading] = useState(false);
   const [selectedOwnerEmail, setSelectedOwnerEmail] = useState("");
@@ -165,12 +166,10 @@ export default function CreatorMint() {
     if (!title.trim()) errs.title = "Title is required";
     if (!description.trim()) errs.description = "Description is required";
     if (!category) errs.category = "Select a category";
-    if (!ownerWallet.trim()) errs.ownerWallet = "Owner wallet is required";
-    else if (ownerWallet.startsWith("0x"))
+    if (!ownerWallet.trim()) errs.ownerWallet = "Owner NexVault ID is required";
+    else if (!isVaultId(ownerWallet))
       errs.ownerWallet =
-        "Must be a Midnight unshielded address, not an Ethereum address";
-    else if (ownerWallet.trim().length < 60)
-      errs.ownerWallet = "Enter a valid Midnight unshielded address";
+        "Enter the owner's NexVault ID (starts with nxv1). They can copy it from their navbar.";
     if (isValidMidnightAddress(ownerWallet) && !selectedOwnerEmail)
       errs.ownerEmail = "Select an owner email address";
     setErrors(errs);
@@ -180,6 +179,15 @@ export default function CreatorMint() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+    if (!connectedAPI) {
+      toast.error("Connect your Midnight wallet first.");
+      return;
+    }
+    const selectedCollection = collections?.find((c) => c.id === collectionId);
+    if (!selectedCollection?.onchainCollectionId) {
+      toast.error("This collection is not registered on Midnight. Create a new collection and mint into that.");
+      return;
+    }
     setMinting(true);
     try {
       let uploadedImageUrl: string | undefined;
@@ -194,81 +202,47 @@ export default function CreatorMint() {
         uploadedImageUrl = uploadData.imageUrl;
       }
 
+      // 1. Mint on Midnight. Nothing is recorded in the backend unless the
+      //    chain accepts the transaction.
+      const fileBytes = file ? new Uint8Array(await file.arrayBuffer()) : new Uint8Array(0);
+      const docHash = await sha256(fileBytes);
+      const metaHash = await sha256(new TextEncoder().encode(`${title}|${category}|${description}`));
+      const ownerId = ownerWallet.trim();
+
+      const minted = await callMintDocument(connectedAPI, {
+        docHash,
+        metaHash,
+        ownerPk: pkFromVaultId(ownerId),
+        onchainCollectionId: BigInt(selectedCollection.onchainCollectionId),
+      });
+
+      // 2. Mirror the minted document in the backend.
       const payload: CreateDocumentPayload = {
         collectionId,
         title,
         description,
         category: category as DocumentCategory,
-        ownerWallet,
+        ownerWallet: ownerId,
         ownerEmail: selectedOwnerEmail,
         fileType: file ? deriveFileType(file) : "pdf",
         ...(uploadedImageUrl ? { fileUrl: uploadedImageUrl } : {}),
       };
-
       const doc = await createDocument.mutateAsync(payload);
       setMintedFileUrl(doc.fileUrl ?? uploadedImageUrl ?? null);
 
-      let txHash = "0x" + Math.random().toString(16).slice(2).padEnd(64, "0");
-      let contractAddress = CONTRACT_ADDRESS;
-      let tokenId = 0;
-      let onchainTokenId: string | undefined;
-      console.log(connectedAPI);
-
-      if (connectedAPI && address) {
-        try {
-          const fileBytes = file
-            ? new Uint8Array(await file.arrayBuffer())
-            : new Uint8Array(0);
-          const docHashBuf = await crypto.subtle.digest("SHA-256", fileBytes);
-          const docHash = new Uint8Array(docHashBuf);
-
-          const metaStr = `${title}|${category}|${description}`;
-          const metaHashBuf = await crypto.subtle.digest(
-            "SHA-256",
-            new TextEncoder().encode(metaStr),
-          );
-          const metaHash = new Uint8Array(metaHashBuf);
-
-          const { shieldedAddress: creatorShieldedAddr } =
-            await connectedAPI.getShieldedAddresses();
-          const creatorPk = decodeShieldedAddress(creatorShieldedAddr);
-          const ownerPk = decodeShieldedAddress(ownerWallet);
-
-          const selectedCollection = collections?.find(
-            (c) => c.id === collectionId,
-          );
-          const onchainCollectionId = selectedCollection?.onchainCollectionId
-            ? BigInt(selectedCollection.onchainCollectionId)
-            : BigInt(0);
-
-          const result = await callMintDocument(connectedAPI, {
-            docHash,
-            metaHash,
-            ownerPk,
-            creatorPk,
-            onchainCollectionId,
-          });
-
-          txHash = result.txId;
-          onchainTokenId = result.onchainTokenId.toString();
-        } catch (err) {
-          console.log("On-chain minting failed, continuing with backend:", err);
-        }
-      }
-
       await mintDocument.mutateAsync({
         id: doc.id,
-        tokenId,
-        contractAddress,
-        txHash,
-        onchainTokenId,
+        tokenId: Number(minted.onchainTokenId),
+        contractAddress: CONTRACT_ADDRESS,
+        txHash: minted.txHash,
+        onchainTokenId: minted.onchainTokenId.toString(),
       });
 
-      setMintedTxHash(txHash);
-      toast.success("Document minted successfully!");
+      setMintedTxHash(minted.txHash);
+      toast.success("Document minted on Midnight");
     } catch (err) {
-      toast.error("Minting failed. Please try again.");
-      console.log(err);
+      console.error("[NexVault] mint failed:", err);
+      toast.error(describeVaultError(err));
     } finally {
       setMinting(false);
     }
@@ -305,10 +279,10 @@ export default function CreatorMint() {
           <Loader2 size={48} className="text-primary animate-spin" />
         </div>
         <h2 className="text-xl font-bold text-foreground mb-2">
-          Minting on Midnight Preprod...
+          Minting on Midnight {MIDNIGHT_NETWORK}...
         </h2>
         <p className="text-muted-foreground text-sm">
-          Creating a unique NFT for your document
+          Approve the transaction in your wallet. Proving can take a minute.
         </p>
       </div>
     );
@@ -339,9 +313,20 @@ export default function CreatorMint() {
         )} */}
         <div className="bg-card border border-border rounded-xl px-4 py-2 mb-6 max-w-sm w-full">
           <p className="text-xs text-muted-foreground mb-1">Transaction ID</p>
-          <p className="text-primary text-xs font-mono break-all">
-            {mintedTxHash}
-          </p>
+          {explorerTxUrl(mintedTxHash) ? (
+            <a
+              href={explorerTxUrl(mintedTxHash)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary text-xs font-mono break-all hover:underline"
+            >
+              {mintedTxHash}
+            </a>
+          ) : (
+            <p className="text-primary text-xs font-mono break-all">
+              {mintedTxHash}
+            </p>
+          )}
         </div>
         <div className="flex gap-3">
           <Button
@@ -441,41 +426,36 @@ export default function CreatorMint() {
                 className="bg-card-elevated border-border text-foreground"
               />
               <Button
-                disabled={createCollection.isPending}
+                disabled={createCollection.isPending || creatingCollection}
                 onClick={async () => {
-                  if (!newColName.trim()) return;
+                  if (!newColName.trim() || creatingCollection) return;
+                  if (!connectedAPI) {
+                    toast.error("Connect your Midnight wallet first.");
+                    return;
+                  }
+                  setCreatingCollection(true);
                   try {
-                    let onchainCollectionId: string | undefined;
-                    if (connectedAPI && address) {
-                      const { shieldedAddress: creatorShieldedAddr } =
-                        await connectedAPI.getShieldedAddresses();
-                      const creatorPk =
-                        decodeShieldedAddress(creatorShieldedAddr);
-                      const result = await callCreateCollection(
-                        connectedAPI,
-                        creatorPk,
-                      );
-                      onchainCollectionId =
-                        result.onchainCollectionId.toString();
-                      toast.info(
-                        `Collection registered on-chain (tx: ${result.txId.slice(0, 10)}…)`,
-                      );
-                    }
+                    // Register the collection on Midnight first; its on-chain id
+                    // is what mintDocument checks the creator against.
+                    const result = await callCreateCollection(connectedAPI);
                     const col = await createCollection.mutateAsync({
                       name: newColName,
-                      onchainCollectionId,
+                      onchainCollectionId: result.onchainCollectionId.toString(),
                     });
                     setCollectionId(col.id);
-                    toast.success(`Collection "${newColName}" created`);
+                    toast.success(`Collection "${newColName}" created on Midnight · tx ${result.txHash.slice(0, 10)}…`);
                     setNewColName("");
                     setNewColOpen(false);
-                  } catch {
-                    toast.error("Failed to create collection");
+                  } catch (err) {
+                    console.error("[NexVault] createCollection failed:", err);
+                    toast.error(describeVaultError(err));
+                  } finally {
+                    setCreatingCollection(false);
                   }
                 }}
                 className="w-full gradient-primary text-primary-foreground rounded-xl"
               >
-                {createCollection.isPending ? "Creating..." : "Create"}
+                {creatingCollection || createCollection.isPending ? "Creating on Midnight… approve in wallet" : "Create"}
               </Button>
             </div>
           </DialogContent>
@@ -550,7 +530,7 @@ export default function CreatorMint() {
 
         <div>
           <div className="flex items-center gap-2">
-            <Label className="text-foreground">Owner Wallet Address</Label>
+            <Label className="text-foreground">Owner NexVault ID</Label>
             {/* <Tooltip>
               <TooltipTrigger>
                 <Info size={14} className="text-muted-foreground" />
@@ -564,7 +544,7 @@ export default function CreatorMint() {
           <Input
             value={ownerWallet}
             onChange={(e) => setOwnerWallet(e.target.value)}
-            placeholder="Midnight unshielded address"
+            placeholder="nxv1…"
             className="bg-card-elevated border-border text-foreground mt-1 font-mono"
           />
           {errors.ownerWallet && (

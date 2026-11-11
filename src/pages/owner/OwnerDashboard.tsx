@@ -203,7 +203,7 @@ export default function OwnerDashboard() {
           <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-center gap-3 max-w-sm w-full">
             <Info size={14} className="text-primary shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Ask a Creator to mint a document and enter your Midnight wallet address as the owner.
+              Ask a Creator to mint a document to your NexVault ID (copy it from the navbar).
             </p>
           </div>
         </div>
