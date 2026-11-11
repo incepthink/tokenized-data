@@ -1,0 +1,139 @@
+{
+  "manifest-version": "1",
+  "compiler-version": "0.36.0",
+  "compiler-commit": "b5d9e4dfc532fe47011c4f6296e254f4853eb469",
+  "language-version": "0.28.0",
+  "runtime-version": "0.21.0",
+  "compiler": {
+    "type": "directory",
+    "contract-info.json": {
+      "type": "file",
+      "size": 6170,
+      "hash": "58d83ed169eeb270fa200e4197e8ae7bf0385525c3339e3c30f0e2c1ee0af8e2"
+    }
+  },
+  "contract": {
+    "type": "directory",
+    "index.d.ts": {
+      "type": "file",
+      "size": 6070,
+      "hash": "06f5b77f3b9782cd0b88ddbb4ab3789137b158e0552d73c523683a31ac535823"
+    },
+    "index.js": {
+      "type": "file",
+      "size": 148578,
+      "hash": "1b078660222652f26d5bed47c171dde78edcfb07f1c798212c8a256287b53a26"
+    },
+    "index.js.map": {
+      "type": "file",
+      "size": 4564,
+      "hash": "f724b98d21940b255b3b6c0b5c2d78ba6a78b95d43072d31f0414a2fb64d5839"
+    }
+  },
+  "zkir": {
+    "type": "directory",
+    "createCollection.bzkir": {
+      "type": "file",
+      "size": 486,
+      "hash": "ae83fd59952ee271cdae063680081f4266f0d626ffd16e5e1d1d5c7f5d4aab76"
+    },
+    "createCollection.zkir": {
+      "type": "file",
+      "size": 1832,
+      "hash": "644d4ba0d507dc5b653f6980d3385209fbf2fc0b0fdc124cec46364a5182ce63"
+    },
+    "grantAccess.bzkir": {
+      "type": "file",
+      "size": 871,
+      "hash": "d3061629f89de3db51ee14c8d5c9ccdfe0780a122117b4255fcf260f83c26575"
+    },
+    "grantAccess.zkir": {
+      "type": "file",
+      "size": 3272,
+      "hash": "09551cc19a1e3e4bf1423e88a19e854fd728684f58982ee72682846965caa85a"
+    },
+    "mintDocument.bzkir": {
+      "type": "file",
+      "size": 1841,
+      "hash": "e081058a413d830378c4762c6d589f05d64fb82a137f1561ca50cdc4222a9ce9"
+    },
+    "mintDocument.zkir": {
+      "type": "file",
+      "size": 5849,
+      "hash": "42ae87883648c492a7179f7a0313531268388e9cb50271f3ab1e5986819685f1"
+    },
+    "revokeAccess.bzkir": {
+      "type": "file",
+      "size": 871,
+      "hash": "a0f6f285dfe067ff27d724ee9e082f1a125cf1d62a3bf8fb22303ff5f9f44f96"
+    },
+    "revokeAccess.zkir": {
+      "type": "file",
+      "size": 3272,
+      "hash": "e58ded4bd7c21ea76034fe2d89da8e5ebdf4e78484f074b3df8822ede101b1ba"
+    },
+    "signDocument.bzkir": {
+      "type": "file",
+      "size": 776,
+      "hash": "d47e6af65b5dea0cbb027ff294b85ce07ea226a5144cc7604de9fe17babdc323"
+    },
+    "signDocument.zkir": {
+      "type": "file",
+      "size": 2931,
+      "hash": "52a1273758012c998f48213c55c73bc27a3f6790d3fd1af8e569ec8602dc23a1"
+    }
+  },
+  "keys": {
+    "type": "directory",
+    "createCollection.prover": {
+      "type": "file",
+      "size": 11277046,
+      "hash": "c7429b31f66c196be842e929af395f890c4bc9bb8656c329584dde9f5026ffa1"
+    },
+    "createCollection.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "7d0193136b61e9d26004daee8b5a56b9aed5e61de89212260c691ee20ba0dc0c"
+    },
+    "grantAccess.prover": {
+      "type": "file",
+      "size": 11277431,
+      "hash": "ad92645af35642b6e26e3ccce1da2dbb6169aa5fb28900aa57ee930bc2c3d3e1"
+    },
+    "grantAccess.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "ff42ebc7d86a2bdaccaeae1ed54572b4cee5222de6c45b885b5c9f608a116ffc"
+    },
+    "mintDocument.prover": {
+      "type": "file",
+      "size": 11278401,
+      "hash": "f2e6376611d4b6d7551a39c431d94abd0668675d244428848dc88e6e723e5a36"
+    },
+    "mintDocument.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "36973d12ddb4eff183bbd2bb59cc07f6bf6e15425b93f75042a1b4badb49892c"
+    },
+    "revokeAccess.prover": {
+      "type": "file",
+      "size": 11277431,
+      "hash": "b6f8273f672171792fb1382b17c3f39ad5b11ead286e40291f2531b6b7e4c28b"
+    },
+    "revokeAccess.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "b7130681e80f8e6d8b86e94c577c9aa5f458b97649e18a0454f96550abf8dae2"
+    },
+    "signDocument.prover": {
+      "type": "file",
+      "size": 11277336,
+      "hash": "1d2fa3216b808cd9ea4a7578748b9e4dd4f65df7504fc731582a54d7ff077450"
+    },
+    "signDocument.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "df7b12a0b6acc75149c461e0cbaa08c7dd65327075b0ff92fe69bbea896c7037"
+    }
+  }
+}
