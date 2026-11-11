@@ -371,8 +371,8 @@ export default function CreatorMint() {
       </h1>
       <p className="text-muted-foreground text-sm mb-8">
         Upload a file and fill in the details below. The document is hashed,
-        tokenized as an NFT, and the owner's wallet receives access on Midnight
-        Preprod.
+        tokenized as an NFT, and the owner's wallet receives access on Midnight{" "}
+        {MIDNIGHT_NETWORK}.
       </p>
 
       {/* Section label: Choose Collection */}
@@ -536,7 +536,7 @@ export default function CreatorMint() {
                 <Info size={14} className="text-muted-foreground" />
               </TooltipTrigger>
               <TooltipContent className="bg-card-elevated border-border text-foreground max-w-xs">
-                The recipient's Midnight unshielded address on Midnight Preprod.
+                The recipient's Midnight NexVault ID.
                 They will receive access to this document.
               </TooltipContent>
             </Tooltip> */}
@@ -721,7 +721,7 @@ export default function CreatorMint() {
           </span>
         </div>
         <p className="text-xs text-muted-foreground text-center">
-          Minting creates a unique tokenized record on Midnight Preprod.
+          Minting creates a unique tokenized record on Midnight {MIDNIGHT_NETWORK}.
         </p>
       </form>
     </div>
